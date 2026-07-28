@@ -36,6 +36,20 @@ from smallcase_finance.schemas.models import (  # noqa: F401
 )
 from smallcase_finance.schemas.nav import NavLatestResponse, NavPointDTO, NavSeriesResponse
 from smallcase_finance.schemas.performance import PerformancePoint, PerformanceResponse
+from smallcase_finance.schemas.sip import (
+    SipAssumptions,
+    SipBacktestRequest,
+    SipBacktestResponse,
+    SipCashflowDTO,
+    SipMarketValueDTO,
+    SipMetricsDTO,
+    SipRunResult,
+    SipSeriesPoint,
+    SipSymbolContributionDTO,
+    StrategyDetailResponse,
+    StrategyListResponse,
+    StrategySummary,
+)
 from smallcase_finance.schemas.smallcase import (
     SmallcaseDetail,
     SmallcaseListItem,
@@ -66,4 +80,16 @@ __all__ = [
     "BacktestResponse",
     "BacktestParams",
     "RebalanceEventDTO",
+    "SipCashflowDTO",
+    "SipMarketValueDTO",
+    "SipMetricsDTO",
+    "SipRunResult",
+    "SipSymbolContributionDTO",
+    "SipAssumptions",
+    "SipBacktestRequest",
+    "SipBacktestResponse",
+    "SipSeriesPoint",
+    "StrategySummary",
+    "StrategyListResponse",
+    "StrategyDetailResponse",
 ]
