@@ -2,7 +2,7 @@
 
 **Product:** SIP Lab / Basket Backtest Engine (evolution of smallcase-finance v0)  
 **Vision:** Monthly SIP performance of custom stock/ETF baskets; **XIRR** primary; local and reproducible  
-**Status:** Binding phases for this product version  
+**Status:** Phases **1–2 shipped** (engine + API + `/sip-lab`); Phase **3** is next. Ship writeup: [build-report-sip-lab-ui.md](./build-report-sip-lab-ui.md)  
 **Related:** [ADR 004](./decisions/004-sip-lab-prd-decisions.md), [ADR 005](./decisions/005-upstox-sole-market-data.md), [PRD](./product/prd-sip-lab.md), [Backlog P0–P2](./product/backlog-phase-0-2.md)
 
 ---
@@ -41,22 +41,23 @@
 
 ### Acceptance criteria
 
-- [ ] SIP strategy config can be loaded from a local file (or equivalent) with validated required fields.
-- [ ] No product code path fetches historical OHLCV from any source other than Upstox (or labeled sample for demos).
-- [ ] `UPSTOX_*` env vars documented; empty `.env.example`; README / [upstox.md](./integrations/upstox.md) match portal auth flow.
-- [ ] Sync writes dated raw drop; pipeline refreshes curated Parquet; re-run is reproducible for same token window + range.
-- [ ] Missing `instrument_key` / candles → explicit skip or warning, never silent third-party fill.
-- [ ] ADRs 004/005 remain the policy source of truth; no conflicting “multi-provider” wording left in active product docs.
+- [x] SIP strategy config can be loaded from a local file (or equivalent) with validated required fields.
+- [x] No product code path fetches historical OHLCV from any source other than Upstox (or labeled sample for demos).
+- [x] `UPSTOX_*` env vars documented; empty `.env.example`; README / [upstox.md](./integrations/upstox.md) match portal auth flow.
+- [x] Sync writes dated raw drop; pipeline refreshes curated Parquet; re-run is reproducible for same token window + range.
+- [x] Missing `instrument_key` / candles → explicit skip or warning, never silent third-party fill.
+- [x] ADRs 004/005 remain the policy source of truth; no conflicting “multi-provider” wording left in active product docs.
 
 ### Exit gate
 
-Founder can set a portal access token, sync a basket’s symbols via Upstox, and see curated prices tagged as Upstox (or clearly labeled sample without token).
+**Met.** Founder can set a portal access token, sync a basket’s symbols via Upstox, and see curated prices tagged as Upstox (or clearly labeled sample without token).
 
 ---
 
 ## Phase 1 — SIP engine + XIRR golden tests (equity/ETF only)
 
-**Goal:** Correct monthly SIP simulation: cash → units → market value → cashflow series → **XIRR**, with CI golden fixtures.
+**Goal:** Correct monthly SIP simulation: cash → units → market value → cashflow series → **XIRR**, with CI golden fixtures.  
+**Status:** **Shipped** — [build-report-sip-lab-ui.md](./build-report-sip-lab-ui.md)
 
 ### Work packages
 
@@ -70,22 +71,23 @@ Founder can set a portal access token, sync a basket’s symbols via Upstox, and
 
 ### Acceptance criteria
 
-- [ ] Given a fixed fixture basket + price path, SIP contribution dates match calendar rule (incl. weekend/holiday → next session).
-- [ ] Units and residual cash (if any) are deterministic and documented.
-- [ ] XIRR on fixture cashflows matches reference within **≤ 1e-4**.
-- [ ] Pytest suite fails if engine regresses XIRR or SIP day logic.
-- [ ] No Coin/MF code; no Kite holdings import; costs remain zero.
-- [ ] Sample prices may power demo fixtures only if labeled as synthetic; market-fidelity claims require Upstox-sourced fixtures or docs that say “synthetic”.
+- [x] Given a fixed fixture basket + price path, SIP contribution dates match calendar rule (incl. weekend/holiday → next session).
+- [x] Units and residual cash (if any) are deterministic and documented.
+- [x] XIRR on fixture cashflows matches reference within **≤ 1e-4**.
+- [x] Pytest suite fails if engine regresses XIRR or SIP day logic.
+- [x] No Coin/MF code; no Kite holdings import; costs remain zero.
+- [x] Sample prices may power demo fixtures only if labeled as synthetic; market-fidelity claims require Upstox-sourced fixtures or docs that say “synthetic”.
 
 ### Exit gate
 
-`pytest` green on SIP + XIRR golden tests; one CLI or service call runs a full equity/ETF basket SIP over multi-year curated prices.
+**Met.** `pytest` green on SIP + XIRR golden tests (`tests/test_sip_xirr.py`, service suite); `SipService` / `POST /backtests/sip` runs equity/ETF basket SIP over curated prices.
 
 ---
 
 ## Phase 2 — API + Next.js SIP UI + export
 
-**Goal:** Expose SIP runs over FastAPI and a focused SIP Lab UI; export results for offline review.
+**Goal:** Expose SIP runs over FastAPI and a focused SIP Lab UI; export results for offline review.  
+**Status:** **Shipped** — route `/sip-lab`, `GET /strategies`, `POST /backtests/sip`; writeup [build-report-sip-lab-ui.md](./build-report-sip-lab-ui.md)
 
 ### Work packages
 
@@ -99,21 +101,22 @@ Founder can set a portal access token, sync a basket’s symbols via Upstox, and
 
 ### Acceptance criteria
 
-- [ ] `POST` (or equivalent) SIP run returns XIRR + series consistent with Phase 1 engine.
-- [ ] UI can select a basket/strategy, run SIP, show primary XIRR and supporting charts/tables.
-- [ ] Export produces a file that matches on-screen cashflows/summary within rounding.
-- [ ] Sample vs live source is visible in UI and API payload.
-- [ ] No Kite/Coin features surface in this phase.
+- [x] `POST` (or equivalent) SIP run returns XIRR + series consistent with Phase 1 engine.
+- [x] UI can select a basket/strategy, run SIP, show primary XIRR and supporting charts/tables.
+- [x] Export produces a file that matches on-screen cashflows/summary within rounding.
+- [x] Sample vs live source is visible in UI and API payload.
+- [x] No Kite/Coin features surface in this phase.
 
 ### Exit gate
 
-Founder runs SIP Lab in browser against local API on real Upstox-curated data (or labeled sample) and downloads export.
+**Met.** Founder runs SIP Lab in browser (`/sip-lab`) against local API on labeled sample or Upstox-curated data and downloads JSON/CSV export.
 
 ---
 
 ## Phase 3 — Benchmark, compare, costs, data-quality warnings
 
-**Goal:** Relative performance vs Upstox-sourced benchmark, multi-strategy compare, optional cost model, and explicit DQ warnings.
+**Goal:** Relative performance vs Upstox-sourced benchmark, multi-strategy compare, optional cost model, and explicit DQ warnings.  
+**Status:** **Next / active** (not started as product surface).
 
 ### Work packages
 
@@ -192,10 +195,11 @@ Founder imports equity holdings and sees a clear “actual vs strategy SIP” co
 ## Suggested sequencing checklist
 
 ```
-P0 foundations ──► P1 SIP engine + goldens ──► P2 API/UI/export
-                                              ──► P3 bench/compare/costs/DQ
-                                              ──► P4 Kite equity vs strategy
-                                              ──► (later) Coin/MF
+P0 foundations ✓ ──► P1 SIP engine + goldens ✓ ──► P2 API/UI/export ✓
+                                                    ──► P3 bench/compare/costs/DQ  ← next
+                                                    ──► P4 Kite equity vs strategy
+                                                    ──► (later) Coin/MF
 ```
 
-Prefer small diffs; start non-trivial work in Plan Mode; document architecture choices under `docs/decisions/`.
+Prefer small diffs; start non-trivial work in Plan Mode; document architecture choices under `docs/decisions/`.  
+Ship notes for P1–P2: [build-report-sip-lab-ui.md](./build-report-sip-lab-ui.md).

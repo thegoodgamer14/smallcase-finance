@@ -2,9 +2,10 @@
 
 **Product name:** SIP Lab (Basket Backtest Engine)  
 **Repo / package history:** `smallcase-finance` v0 (local smallcase NAV demo) → SIP Lab  
-**Status:** v0 **shipped**; SIP Lab engine is the active product goal  
+**Status:** v0 **shipped**; SIP Lab **Phases 1–2 shipped** (engine + API + `/sip-lab` UI); next = Phase 3 hardening  
 **Binding decisions:** [ADR 004](docs/decisions/004-sip-lab-prd-decisions.md) · [ADR 005](docs/decisions/005-upstox-sole-market-data.md)  
-**Phased plan:** [docs/ROADMAP.md](docs/ROADMAP.md)
+**Phased plan:** [docs/ROADMAP.md](docs/ROADMAP.md)  
+**SIP Lab ship writeup:** [docs/build-report-sip-lab-ui.md](docs/build-report-sip-lab-ui.md)
 
 ---
 
@@ -24,9 +25,14 @@ Personal, local-first tool to measure **monthly SIP performance** of custom **st
 
 ---
 
-## Current goal — SIP Lab (post-v0)
+## Current goal — after Phases 1–2
 
-Build a **correct SIP engine** before expanding UI or broker import:
+**Shipped:** correct SIP engine (cash → units → XIRR), FastAPI `POST /backtests/sip` + `GET /strategies`, and Next.js **SIP Lab** at `/sip-lab` (XIRR-primary UI, demo labels, export). Full writeup: [docs/build-report-sip-lab-ui.md](docs/build-report-sip-lab-ui.md).
+
+**Next (Phase 3):** benchmark SIP, multi-strategy compare, optional costs, richer DQ / strict Upstox mode.  
+**Later:** Phase 4 Kite equity import; Coin/MF last.
+
+Still true:
 
 1. Strategy config (amount, fixed calendar day-of-month, start/end, allocation).
 2. **SIP day rule:** fixed calendar day → **next trading day** if session missing.
@@ -35,8 +41,7 @@ Build a **correct SIP engine** before expanding UI or broker import:
 5. **Zero costs** MVP (brokerage/STT/slippage optional later, behind config).
 6. Prices for real runs: **Upstox API only** via existing `src/smallcase_finance/integrations/upstox/`.
 
-Reuse v0 assets: FastAPI, Next.js shell, pipeline → curated Parquet, pure `calc/`, sample smallcases, Upstox client.  
-**Do not** treat v0 weight-NAV rebalance/`POST /backtest` as SIP performance — SIP needs a dedicated cashflow path.
+**Do not** treat v0 weight-NAV rebalance/`POST /backtest` as SIP performance — use **`POST /backtests/sip`** only.
 
 ---
 
@@ -46,14 +51,15 @@ Full detail, exit criteria, and ordering: **[docs/ROADMAP.md](docs/ROADMAP.md)**
 
 | Phase | Focus | Status |
 |-------|--------|--------|
-| **0** | smallcase-finance v0 — NAV/metrics demo, pipeline, API, UI | **Shipped** (see checklist below) |
-| **1** | **Correct SIP engine** + XIRR fixtures + Upstox-only history path | **Active** |
-| **2** | SIP Lab **UI** (run config, cashflows, XIRR, demo labels) | After Phase 1 |
-| **3** | Hardening: strict “require Upstox” mode, operator runbook, V3 daily defaults | With / after UI |
+| **0** | Foundations: strategy config, Upstox-only provider, cache, secrets | **Shipped** (with v0 + SIP scaffolds) |
+| **0 / v0** | smallcase-finance v0 — NAV/metrics demo, pipeline, API, UI | **Shipped** (see checklist below) |
+| **1** | **Correct SIP engine** + XIRR fixtures + Upstox-only history path | **Shipped** — [build-report-sip-lab-ui.md](docs/build-report-sip-lab-ui.md) |
+| **2** | SIP Lab **API + UI** (run config, cashflows, XIRR, demo labels, export) | **Shipped** — `/sip-lab`, `POST /backtests/sip` |
+| **3** | Benchmark, compare, optional costs, DQ warnings, strict Upstox mode | **Next / active** |
 | **4** | **Kite equity import** + live portfolio vs SIP backtest compare | Later — [kite-connect.md](docs/integrations/kite-connect.md) only |
 | **5** | **Coin / mutual funds** (import + MF NAV) | **Last** — not this version |
 
-Order of work: **SIP engine → UI → Kite equity import → Coin last.**
+Order of work: **SIP engine → UI → (now) hardening → Kite equity import → Coin last.**
 
 ---
 
@@ -170,14 +176,14 @@ Production auth, multi-user, live trading, full broker integration, FX engine, f
 
 ## What reuses vs what is new
 
-| Reuse from v0 | New for SIP Lab |
+| Reuse from v0 | New for SIP Lab (Phases 1–2) |
 |---------------|-----------------|
 | Pipeline, curated Parquet, DuckDB reads | SIP schedule + next-session invest rule |
-| Pure `calc/` patterns + tests layout | Units ledger + contribution cashflows |
-| FastAPI app shell + deps | SIP run service + XIRR (+ fixtures ≤ 1e-4) |
-| Next.js shell, theme, charts primitives | SIP Lab UI (Phase 2) |
+| Pure `calc/` patterns + tests layout | Units ledger + contribution cashflows + XIRR (≤ 1e-4 goldens) |
+| FastAPI app shell + deps | `GET /strategies`, `POST /backtests/sip`, `SipService` |
+| Next.js shell, theme, charts primitives | `/sip-lab` UI, export, data-source chip/banner |
 | Upstox client + instruments + sync | Upstox-only policy (no vendor fallbacks); V3 daily preferred |
-| Sample smallcases / basket JSON | Strategy schema (amount, day-of-month, range) |
+| Sample smallcases / basket JSON | Strategy schema + `config/strategies/*.yaml` |
 | Weight-NAV / rebalance `POST /backtest` | Kept for composition analysis; **not** SIP performance |
 
 ---
@@ -201,7 +207,7 @@ make api     # :8000
 make web     # :3000
 ```
 
-Real multi-year prices (when ready): set Upstox env vars → sync → pipeline → SIP run (engine once Phase 1 lands). Without a token, demo/sample path only.
+Real multi-year prices: set Upstox env vars → `make sync-upstox` → `make api` + `make web` → open **/sip-lab**. Without a token, demo/sample path only (labeled — not live market SIP).
 
 ---
 
@@ -216,6 +222,7 @@ Real multi-year prices (when ready): set Upstox env vars → sync → pipeline �
 | [docs/integrations/upstox.md](docs/integrations/upstox.md) | Auth, API contracts, sync operator notes |
 | [docs/integrations/kite-connect.md](docs/integrations/kite-connect.md) | Phase 4 plan only (no runtime) |
 | [docs/build-report.md](docs/build-report.md) | What v0 actually shipped |
+| [docs/build-report-sip-lab-ui.md](docs/build-report-sip-lab-ui.md) | What SIP Lab Phases 1–2 shipped + how to run/read XIRR |
 | [README.md](README.md) | Install and run |
 
 Update this file when goals complete or priorities shift. Prefer ADRs + ROADMAP for detailed decisions and phase exits; keep PRODUCT as the short vision + status surface.
