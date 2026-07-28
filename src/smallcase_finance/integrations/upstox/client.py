@@ -85,7 +85,8 @@ class UpstoxClient:
         if not self.access_token:
             raise UpstoxError(
                 "Upstox access token not configured. "
-                "Set UPSTOX_ACCESS_TOKEN (or UPSTOX_API_KEY) in the environment."
+                "Set UPSTOX_ACCESS_TOKEN in the environment "
+                "(Bearer from Upstox Developer Apps → Generate)."
             )
         return {
             "Accept": "application/json",

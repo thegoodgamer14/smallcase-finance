@@ -85,17 +85,27 @@ def test_metrics_custom_date_range():
     assert body["start"] <= body["end"]
 
 
-def test_upstox_status_never_leaks_secret():
+def test_upstox_status_configured_boolean_only():
+    """Status reports credential readiness as a boolean — never secrets."""
     r = client.get("/integrations/upstox/status")
     assert r.status_code == 200
     body = r.json()
     assert "configured" in body
+    assert isinstance(body["configured"], bool)
     assert "default_years" in body
-    # Must not echo any token-like field
+    assert body["provider"] == "upstox"
+    # Must not echo any secret field
     for k in body:
         assert "token" not in k.lower() or k == "configured"
     assert "access_token" not in body
     assert "api_key" not in body
+    assert "api_secret" not in body
+    # Values must not look like leaked secrets
+    for v in body.values():
+        if isinstance(v, str):
+            assert "Bearer " not in v
+            assert not v.startswith("eyJ")  # JWT-ish
+
 
 
 def test_upstox_sync_http_disabled_by_default():

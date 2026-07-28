@@ -1,7 +1,11 @@
-"""Upstox historical price integration.
+"""Upstox historical price integration (sole market-data provider).
 
-Credentials: ``UPSTOX_ACCESS_TOKEN`` (or ``UPSTOX_API_KEY``) in the environment.
-Never commit secrets. Sample data remains the default when credentials are absent.
+Credentials (portal names → env):
+- ``UPSTOX_ACCESS_TOKEN`` — Bearer for historical candles (**required** for live prices)
+- ``UPSTOX_API_KEY`` / ``UPSTOX_API_SECRET`` — OAuth client_id / client_secret (token exchange)
+- ``UPSTOX_REDIRECT_URI`` — OAuth only
+
+Never commit secrets. Sample data is demo-only when the access token is absent.
 """
 
 from smallcase_finance.integrations.upstox.client import UpstoxClient, UpstoxError

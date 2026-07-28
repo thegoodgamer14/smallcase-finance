@@ -1,4 +1,4 @@
-"""Unit tests for Upstox client mapping, lookback, and sync (mocked HTTP)."""
+"""Unit tests for Upstox client, market_data provider, lookback, and sync (mocked HTTP)."""
 
 from __future__ import annotations
 
@@ -19,6 +19,11 @@ from smallcase_finance.integrations.upstox.sync import (
     resolve_lookback,
     sync_prices,
     write_price_drop,
+)
+from smallcase_finance.market_data import (
+    MarketDataProvider,
+    UpstoxProvider,
+    get_market_data_provider,
 )
 
 
@@ -42,6 +47,7 @@ class _FakeTransport:
         self.urls.append(url)
         assert headers is not None
         assert "Authorization" in headers
+        assert headers["Authorization"].startswith("Bearer ")
         return _FakeResponse(self.status_code, self.payload)
 
 
@@ -155,7 +161,10 @@ def test_sync_without_credentials_sample_fallback(monkeypatch: pytest.MonkeyPatc
     )
     assert result.used_sample_fallback is True
     assert result.row_count == 0
-    assert any("credentials" in w.lower() or "token" in w.lower() or "Sample" in result.message for w in result.warnings) or "Sample" in result.message
+    assert any(
+        "credentials" in w.lower() or "token" in w.lower() or "Sample" in result.message
+        for w in result.warnings
+    ) or "Sample" in result.message
 
 
 def test_sync_mocked_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -182,3 +191,92 @@ def test_sync_mocked_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert result.row_count == 2
     assert result.output_path is not None
     assert Path(result.output_path).is_file()
+
+
+# ── MarketDataProvider / UpstoxProvider ─────────────────────────────────────
+
+
+def test_upstox_provider_is_market_data_provider():
+    transport = _FakeTransport(SAMPLE_PAYLOAD)
+    client = UpstoxClient(access_token="tok", transport=transport)
+    provider = UpstoxProvider(client=client)
+    assert isinstance(provider, MarketDataProvider)
+    assert provider.name == "upstox"
+    status = provider.status()
+    assert status.configured is True
+    assert status.source_label == "upstox"
+    # status must never expose secrets
+    assert not hasattr(status, "access_token")
+    assert not hasattr(status, "api_key")
+
+
+def test_upstox_provider_get_history_mocked():
+    transport = _FakeTransport(SAMPLE_PAYLOAD)
+    client = UpstoxClient(access_token="tok", transport=transport)
+    provider = get_market_data_provider(client=client)
+    bars = provider.get_history(
+        symbol="TCS",
+        from_date=date(2024, 1, 1),
+        to_date=date(2024, 1, 31),
+    )
+    assert len(bars) == 2
+    assert bars[0].bar_date == date(2024, 1, 2)
+    assert bars[0].source == "upstox"
+    assert bars[0].close == 102.0
+    assert "historical-candle" in transport.urls[0]
+
+
+def test_upstox_provider_not_configured_returns_empty():
+    client = UpstoxClient(access_token="", transport=_FakeTransport(SAMPLE_PAYLOAD))
+    provider = UpstoxProvider(client=client)
+    assert provider.status().configured is False
+    assert provider.status().source_label == "sample"
+    bars = provider.get_history(
+        symbol="TCS",
+        from_date=date(2024, 1, 1),
+        to_date=date(2024, 1, 2),
+    )
+    assert bars == []
+
+
+def test_upstox_provider_sync_to_raw_delegates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    transport = _FakeTransport(SAMPLE_PAYLOAD)
+    client = UpstoxClient(access_token="tok", transport=transport)
+    provider = UpstoxProvider(client=client)
+    monkeypatch.setattr(
+        "smallcase_finance.integrations.upstox.sync.raw_root",
+        lambda: tmp_path / "raw",
+    )
+    (tmp_path / "raw" / "prices").mkdir(parents=True)
+
+    result = provider.sync_to_raw(
+        symbols=["TCS"],
+        from_date=date(2024, 1, 1),
+        to_date=date(2024, 1, 31),
+        run_pipeline_after=False,
+        allow_sample_fallback=False,
+    )
+    assert result.row_count == 2
+    assert "TCS" in result.fetched_symbols
+
+
+def test_config_api_key_is_not_bearer_alias(monkeypatch: pytest.MonkeyPatch):
+    """UPSTOX_API_KEY is client_id, not a substitute for UPSTOX_ACCESS_TOKEN."""
+    monkeypatch.delenv("UPSTOX_ACCESS_TOKEN", raising=False)
+    monkeypatch.setenv("UPSTOX_API_KEY", "portal-api-key-not-a-token")
+    monkeypatch.setenv("UPSTOX_API_SECRET", "portal-secret")
+    # Re-read config module values as the client would at construct time
+    import importlib
+
+    import smallcase_finance.config as cfg
+
+    importlib.reload(cfg)
+    assert cfg.UPSTOX_ACCESS_TOKEN == ""
+    assert cfg.UPSTOX_API_KEY == "portal-api-key-not-a-token"
+    assert cfg.UPSTOX_API_SECRET == "portal-secret"
+    assert cfg.upstox_configured() is False
+    # Client must not pick up API_KEY as Bearer
+    client = UpstoxClient(access_token=cfg.UPSTOX_ACCESS_TOKEN)
+    assert client.configured is False

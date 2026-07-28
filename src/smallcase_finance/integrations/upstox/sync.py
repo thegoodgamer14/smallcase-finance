@@ -217,8 +217,8 @@ def sync_prices(
 
     if not client.configured:
         msg = (
-            "Upstox credentials not set (UPSTOX_ACCESS_TOKEN / UPSTOX_API_KEY). "
-            "Using sample price data path instead."
+            "Upstox access token not set (UPSTOX_ACCESS_TOKEN). "
+            "Using sample price data path instead (demo only)."
         )
         logger.warning(msg)
         result.warnings.append(msg)

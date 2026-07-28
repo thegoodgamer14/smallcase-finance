@@ -19,9 +19,17 @@ router = APIRouter(prefix="/integrations", tags=["integrations"])
 
 
 class UpstoxStatusResponse(BaseModel):
+    """Credential status only — never includes tokens or secrets.
+
+    ``configured`` is the sole secret-related field (boolean).
+    """
+
     provider: str = "upstox"
     configured: bool = Field(
-        description="True if UPSTOX_ACCESS_TOKEN / UPSTOX_API_KEY is set (never returns the secret)"
+        description=(
+            "True if UPSTOX_ACCESS_TOKEN is set. "
+            "Boolean only — never returns the token value."
+        )
     )
     sync_http_enabled: bool = Field(
         description="True only when UPSTOX_SYNC_ENABLED=1 (local footgun guard)"
@@ -53,17 +61,20 @@ class UpstoxSyncResponse(BaseModel):
 
 @router.get("/upstox/status", response_model=UpstoxStatusResponse)
 def upstox_status() -> UpstoxStatusResponse:
+    """Report whether Upstox is configured (boolean only — no secrets)."""
     configured = upstox_configured()
     if configured:
         hint = (
             "Token present. Sync via CLI: "
-            "python -m smallcase_finance.integrations.upstox --years 3 --pipeline "
-            "or POST /integrations/upstox/sync when UPSTOX_SYNC_ENABLED=1."
+            "make sync-upstox "
+            "or python -m smallcase_finance.integrations.upstox --years 3 --pipeline. "
+            "POST /integrations/upstox/sync only when UPSTOX_SYNC_ENABLED=1."
         )
     else:
         hint = (
-            "No token. App uses sample prices. Set UPSTOX_ACCESS_TOKEN in .env "
-            "then re-run sync. See docs/integrations/upstox.md."
+            "No access token. App uses sample prices (demo only). "
+            "Set UPSTOX_ACCESS_TOKEN in .env then make sync-upstox. "
+            "See docs/integrations/upstox.md."
         )
     return UpstoxStatusResponse(
         configured=configured,
@@ -86,6 +97,7 @@ def upstox_sync(body: UpstoxSyncRequest) -> UpstoxSyncResponse:
             detail=(
                 "HTTP sync disabled. Use CLI "
                 "`python -m smallcase_finance.integrations.upstox` "
+                "or `make sync-upstox`, "
                 "or set UPSTOX_SYNC_ENABLED=1 for local-only API sync."
             ),
         )
