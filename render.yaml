@@ -1,0 +1,35 @@
+# Render Blueprint — free-tier FastAPI deploy for Smallcase Finance / SIP Lab
+# Docs: docs/deploy/render.md
+# Dashboard: https://dashboard.render.com
+#
+# After first deploy, set secrets in the service Environment tab
+# (never commit real tokens). Redirect URI for Upstox/Kite:
+#   https://<service-name>.onrender.com/callback/upstox
+#   https://<service-name>.onrender.com/callback/kite
+
+services:
+  - type: web
+    name: smallcase-sip-lab
+    runtime: python
+    plan: free
+    region: singapore
+    # Build installs the package and materializes sample curated Parquet
+    # (data/curated is gitignored; pipeline must run at build time).
+    buildCommand: pip install . && python -m smallcase_finance.pipeline
+    startCommand: uvicorn smallcase_finance.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: UPSTOX_ACCESS_TOKEN
+        sync: false
+      - key: UPSTOX_API_KEY
+        sync: false
+      - key: UPSTOX_API_SECRET
+        sync: false
+      - key: UPSTOX_REDIRECT_URI
+        sync: false
+      - key: UPSTOX_SYNC_ENABLED
+        value: "0"
+      - key: CORS_ORIGINS
+        sync: false
