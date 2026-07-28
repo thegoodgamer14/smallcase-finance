@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === Smallcase Finance design tokens — dark default === */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg-app: #0b0f14;
+  --bg-surface: #121821;
+  --bg-surface-raised: #1a222d;
+  --bg-muted: #1c2430;
+  --bg-hover: #243041;
+
+  /* Borders */
+  --border-default: #2a3544;
+  --border-subtle: #1e2733;
+
+  /* Text */
+  --text-primary: #e8eef6;
+  --text-secondary: #9aa8b8;
+  --text-muted: #6b7a8c;
+  --text-inverse: #0b0f14;
+
+  /* Brand (structure — not P&L) */
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-subtle: rgba(59, 130, 246, 0.12);
+
+  /* P&L / risk */
+  --pnl-pos: #22c55e;
+  --pnl-neg: #ef4444;
+  --pnl-pos-muted: rgba(34, 197, 94, 0.12);
+  --pnl-neg-muted: rgba(239, 68, 68, 0.12);
+  --risk-warning: #f59e0b;
+  --risk-critical: #f97316;
+  --neutral-flat: #9aa8b8;
+
+  /* Chart series */
+  --chart-portfolio: #60a5fa;
+  --chart-benchmark: #a78bfa;
+  --chart-excess: #2dd4bf;
+  --chart-grid: var(--border-subtle);
+  --chart-axis: var(--text-secondary);
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Shell */
+  --nav-width: 220px;
+  --nav-width-collapsed: 64px;
+  --topbar-height: 56px;
+  --content-max: 1440px;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-app: #f4f6f8;
+  --bg-surface: #ffffff;
+  --bg-surface-raised: #ffffff;
+  --bg-muted: #eef1f4;
+  --bg-hover: #e8ecf0;
+
+  --border-default: #d8dee6;
+  --border-subtle: #e8edf2;
+
+  --text-primary: #0f172a;
+  --text-secondary: #5b6b7c;
+  --text-muted: #8b98a8;
+  --text-inverse: #ffffff;
+
+  --accent: #2563eb;
+  --accent-hover: #3b82f6;
+  --accent-subtle: rgba(37, 99, 235, 0.1);
+
+  --pnl-pos: #16a34a;
+  --pnl-neg: #dc2626;
+  --pnl-pos-muted: rgba(22, 163, 74, 0.1);
+  --pnl-neg-muted: rgba(220, 38, 38, 0.1);
+  --risk-warning: #d97706;
+  --risk-critical: #ea580c;
+  --neutral-flat: #64748b;
+
+  --chart-portfolio: #2563eb;
+  --chart-benchmark: #7c3aed;
+  --chart-excess: #0d9488;
+}
+
+body {
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Scrollbar (subtle, dark-friendly) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
