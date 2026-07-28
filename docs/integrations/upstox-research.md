@@ -1,9 +1,10 @@
-# Upstox Historical Market Data — Research Notes (v0.1)
+# Upstox Historical Market Data — Research Notes
 
+**Canonical user/ops guide:** [`upstox.md`](upstox.md) (start there)  
 **Audience:** Backend / Data Engineer implementers  
-**Scope:** Equity (India) historical OHLC for local smallcase backtests (~3y default lookback)  
-**Status:** Research only — no client code in this doc  
-**Researched against:** Official Upstox Developer API docs (accessed 2026-07-28)  
+**Scope:** Equity/ETF (India) historical OHLC for SIP Lab / basket backtests (~3y default lookback)  
+**Status:** Research companion — endpoint accuracy verified against official docs (2026-07-28); client lives under `src/smallcase_finance/integrations/upstox/`  
+**Product binding:** Upstox is the **sole** historical equity/ETF OHLCV source this version — **no** yfinance, bhavcopy, or Fyers. Without token → sample data for demo only.  
 **Repo prices contract:** [`docs/data-dictionary.md`](../data-dictionary.md) § `prices`
 
 ---
@@ -13,12 +14,14 @@
 | Need | Recommendation |
 |------|----------------|
 | Auth for personal sync CLI | Manual access token (or OAuth code exchange) → `UPSTOX_ACCESS_TOKEN` env |
-| App credentials | `UPSTOX_API_KEY` + `UPSTOX_API_SECRET` (+ `UPSTOX_REDIRECT_URI` if OAuth) |
+| App credentials | `UPSTOX_API_KEY` (= `client_id`) + `UPSTOX_API_SECRET` (= `client_secret`) (+ `UPSTOX_REDIRECT_URI` if OAuth) |
 | Daily OHLC (preferred) | **V3** `GET /v3/historical-candle/{instrument_key}/days/1/{to_date}/{from_date}` |
-| Symbol resolution | Download BOD JSON instruments (no auth) **or** search API; map `trading_symbol` → `instrument_key` |
+| Daily OHLC (current client default) | **V2** `GET /v2/historical-candle/{instrument_key}/day/{to_date}/{from_date}` — **~1 year max** per call; chunk or migrate to V3 for multi-year |
+| Symbol resolution | Curated map + `data/raw/instruments/upstox_instrument_map.json`; optional BOD JSON / search API |
 | 3-year lookback | **One request per symbol** on V3 daily (max retrieval = 1 decade) |
 | Secrets | **Never commit**; `.env` / shell env only; ship `.env.example` placeholders only |
-| Fallback | Keep synthetic sample under `data/raw/prices/*_sample/` |
+| Fallback | Synthetic sample under `data/raw/prices/*_sample/` when token missing |
+| Alternate providers | **None** in this product version |
 
 ---
 
@@ -102,22 +105,27 @@ Base URL pattern: `https://api.upstox.com/{v2|v3}/...`
 
 | Env var | Required for | Secret? | Notes |
 |---------|--------------|---------|--------|
-| `UPSTOX_ACCESS_TOKEN` | Historical + search APIs | **yes** | Primary for v0.1 sync |
-| `UPSTOX_API_KEY` | OAuth / token exchange | treat as secret | = `client_id` |
-| `UPSTOX_API_SECRET` | OAuth / token exchange | **yes** | = `client_secret` |
+| `UPSTOX_ACCESS_TOKEN` | Historical + search APIs | **yes** | Primary Bearer for sync CLI |
+| `UPSTOX_API_KEY` | OAuth / token exchange | treat as secret | Official = `client_id`. **Not** a Bearer alias — put the token only in `UPSTOX_ACCESS_TOKEN`. |
+| `UPSTOX_API_SECRET` | OAuth / token exchange | **yes** | = `client_secret` (not used by sync CLI today) |
 | `UPSTOX_REDIRECT_URI` | OAuth only | no | Must match app config |
+| `UPSTOX_API_BASE` | Client base URL | no | Default `https://api.upstox.com/v2` |
+| `UPSTOX_DEFAULT_YEARS` | Lookback default | no | Default `3` |
+| `UPSTOX_SYNC_ENABLED` | HTTP POST sync | no | Default off; prefer CLI |
 | `UPSTOX_EXTENDED_TOKEN` | Optional read path | **yes** | Prefer `ACCESS_TOKEN` unless we verify historical works with extended |
 
-**Explicit policy:** never store secrets in git. Commit only `.env.example` with empty placeholders. Local `.env` must be gitignored.
+**Explicit policy:** never store secrets in git. Commit only `.env.example` with empty placeholders. Local `.env` must be gitignored. See canonical [upstox.md §2](upstox.md#2-environment-variables-this-project).
 
 Example `.env.example` (placeholders only):
 
 ```bash
 # Upstox — never commit real values
 UPSTOX_ACCESS_TOKEN=
-UPSTOX_API_KEY=
-UPSTOX_API_SECRET=
-UPSTOX_REDIRECT_URI=http://127.0.0.1:8765/callback
+# UPSTOX_API_KEY=          # OAuth client_id; not the Bearer
+# UPSTOX_API_SECRET=
+# UPSTOX_REDIRECT_URI=http://127.0.0.1:8765/callback
+# UPSTOX_API_BASE=https://api.upstox.com/v2
+# UPSTOX_DEFAULT_YEARS=3
 ```
 
 Instrument **master download** (BOD JSON) does **not** require auth (public CDN URLs).
@@ -467,17 +475,20 @@ Instrument CDN downloads and this research doc contain **no** credentials.
 
 ---
 
-## 7) Suggested v0.1 sync flow (implementation outline)
+## 7) Sync flow (implemented; keep research aligned)
 
-Out of scope to implement here; order of operations for the next slice:
+Implemented in `integrations/upstox/sync.py` + CLI/`make sync-upstox`:
 
-1. Require `UPSTOX_ACCESS_TOKEN` (fail fast with message if missing).
-2. Collect symbols from local smallcases under `data/raw/smallcases/*.json`.
-3. Download/cache NSE instruments JSON → resolve keys (NSE preferred).
-4. For each resolved symbol: V3 historical `days/1` from `today - lookback_years` (default **3**) to `today`.
-5. Map candles → prices rows; write `data/raw/prices/<date>_upstox/prices.parquet`.
-6. Run existing pipeline ingest + derived recompute (`make` target).
-7. On unresolved/empty: WARN; leave sample path available if no Upstox data.
+1. Resolve lookback (`--years` / `--from`/`--to` / `UPSTOX_DEFAULT_YEARS`).
+2. Collect symbols from local smallcases under `data/raw/smallcases/*.json` (or `--symbols`).
+3. If no token: WARN + sample fallback (`generate_sample_raw`); optional pipeline.
+4. Resolve keys via curated map + `upstox_instrument_map.json` (NSE_EQ\|ISIN).
+5. For each resolved symbol: historical daily candles (client default: **V2** `.../day/{to}/{from}` on `UPSTOX_API_BASE`).
+6. Map candles → prices rows (`source=upstox`, `adj_close=null`); write `data/raw/prices/<date>_upstox/prices.parquet`.
+7. Optional `--pipeline` / `make sync-upstox` → curated recompute.
+8. On unresolved/empty: WARN + skip symbol; do not invent prices.
+
+**Follow-up:** migrate fetch URL to V3 `days/1` for multi-year without year-chunking (see §3.1).
 
 ---
 
