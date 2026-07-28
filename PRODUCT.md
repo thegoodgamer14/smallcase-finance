@@ -1,14 +1,124 @@
-# PRODUCT.md — Current Vision & Status
+# PRODUCT.md — SIP Lab / Basket Backtest Engine
+
+**Product name:** SIP Lab (Basket Backtest Engine)  
+**Repo / package history:** `smallcase-finance` v0 (local smallcase NAV demo) → SIP Lab  
+**Status:** v0 **shipped**; SIP Lab engine is the active product goal  
+**Binding decisions:** [ADR 004](docs/decisions/004-sip-lab-prd-decisions.md) · [ADR 005](docs/decisions/005-upstox-sole-market-data.md)  
+**Phased plan:** [docs/ROADMAP.md](docs/ROADMAP.md)
+
+---
 
 ## Vision
-Personal tool to define, test, and analyze Smallcase-style thematic portfolios using real or sample data. Focus on composition logic, performance measurement, risk, and simple rebalancing rules.
 
-## Current Goal — v0 **shipped** (local demo)
+Personal, local-first tool to measure **monthly SIP performance** of custom **stock/ETF baskets** (smallcase-style compositions the founder authors).
+
+| Pillar | Meaning |
+|--------|---------|
+| **SIP-first** | Cash → units on schedule → market value → **XIRR** as the primary success metric |
+| **Baskets** | Local smallcase definitions (JSON); weights / equal-weight; versioned constituents |
+| **Reproducible** | One command path from prices → curated Parquet → calc → API/UI; fixtures gate correctness |
+| **Real history** | Multi-year equity/ETF **OHLCV from Upstox only** (not alternate vendors) |
+| **Honest demos** | Sample/synthetic prices allowed **without a token**, labeled demo — never as live market SIP |
+
+**Not this product (yet / ever in this version):** live trading, F&O, multi-user social, paid multi-provider market-data sprawl, Coin/MF import engines.
+
+---
+
+## Current goal — SIP Lab (post-v0)
+
+Build a **correct SIP engine** before expanding UI or broker import:
+
+1. Strategy config (amount, fixed calendar day-of-month, start/end, allocation).
+2. **SIP day rule:** fixed calendar day → **next trading day** if session missing.
+3. Units ledger + contribution cashflows; terminal/exit cashflow for XIRR.
+4. **XIRR primary**; golden fixtures within absolute tolerance **`1e-4`**.
+5. **Zero costs** MVP (brokerage/STT/slippage optional later, behind config).
+6. Prices for real runs: **Upstox API only** via existing `src/smallcase_finance/integrations/upstox/`.
+
+Reuse v0 assets: FastAPI, Next.js shell, pipeline → curated Parquet, pure `calc/`, sample smallcases, Upstox client.  
+**Do not** treat v0 weight-NAV rebalance/`POST /backtest` as SIP performance — SIP needs a dedicated cashflow path.
+
+---
+
+## Phases (summary)
+
+Full detail, exit criteria, and ordering: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Locked implementation order ([ADR 004](docs/decisions/004-sip-lab-prd-decisions.md)):
+
+| Phase | Focus | Status |
+|-------|--------|--------|
+| **0** | smallcase-finance v0 — NAV/metrics demo, pipeline, API, UI | **Shipped** (see checklist below) |
+| **1** | **Correct SIP engine** + XIRR fixtures + Upstox-only history path | **Active** |
+| **2** | SIP Lab **UI** (run config, cashflows, XIRR, demo labels) | After Phase 1 |
+| **3** | Hardening: strict “require Upstox” mode, operator runbook, V3 daily defaults | With / after UI |
+| **4** | **Kite equity import** + live portfolio vs SIP backtest compare | Later — [kite-connect.md](docs/integrations/kite-connect.md) only |
+| **5** | **Coin / mutual funds** (import + MF NAV) | **Last** — not this version |
+
+Order of work: **SIP engine → UI → Kite equity import → Coin last.**
+
+---
+
+## Binding product rules (ADR 004 / 005)
+
+### Historical data — Upstox only
+
+| Rule | Detail |
+|------|--------|
+| **Sole source** | Equity/ETF historical OHLCV for SIP Lab and basket backtests comes **only** from the **Upstox API**. |
+| **Forbidden this version** | **No** yfinance, **No** NSE bhavcopy, **No** Fyers (or other) fallbacks in product code paths. |
+| **Code** | Extend [`src/smallcase_finance/integrations/upstox/`](src/smallcase_finance/integrations/upstox/) against official contracts. |
+| **Pipeline** | Sync → immutable dated raw drops → curated Parquet; app reads curated only. |
+| **Missing bars** | Skip/warn — never invent prices from another vendor. |
+| **Demos** | Sample/synthetic prices when no token; UI/API/logs must label **demo / sample**, not real SIP performance. |
+
+Contract & auth: [docs/integrations/upstox.md](docs/integrations/upstox.md) · policy ADR: [005](docs/decisions/005-upstox-sole-market-data.md).
+
+**Env (never commit; repo is public):**
+
+| Env var | Role |
+|---------|------|
+| `UPSTOX_ACCESS_TOKEN` | Primary Bearer token for historical candles (portal-generated OK for MVP) |
+| `UPSTOX_API_KEY` | API Key / `client_id` (OAuth / app id) |
+| `UPSTOX_API_SECRET` | API Secret / `client_secret` (token exchange only) |
+| `UPSTOX_REDIRECT_URI` | OAuth redirect (must match developer app) |
+
+Access tokens expire ~**3:30 AM IST** the following day (per Upstox); re-generate or re-OAuth as needed. Prefer daytime syncs. See Upstox developer portal flow in [upstox.md](docs/integrations/upstox.md).
+
+### SIP engine defaults
+
+| Rule | Detail |
+|------|--------|
+| **Day rule** | Fixed calendar day-of-month → **next trading day** if non-session |
+| **Costs** | **Zero** brokerage/STT/slippage/expense drag (MVP) |
+| **Primary metric** | **XIRR** on contribution + terminal cashflows |
+| **Fixture tolerance** | Absolute **`1e-4`** on golden XIRR tests |
+| **Secondary metrics** | NAV path, CAGR, vol, max DD remain available; do not replace XIRR for SIP success |
+
+### Deferred / out of band
+
+| Item | Policy |
+|------|--------|
+| **Coin / MF** | **Deferred.** No Coin import APIs, MF holdings endpoints, or MF NAV engine this version. |
+| **Kite** | Phase 4 roadmap only — equity book import + live-vs-SIP compare; **not** a price source. Spec: [kite-connect.md](docs/integrations/kite-connect.md). |
+| **Hosting** | Local-first; free-tier hosting optional later; no multi-tenant assumption. |
+| **Repo** | Remains **public**. Secrets only in env / gitignored `.env`. `.env.example` = empty placeholders. |
+
+### Explicit non-goals (this version)
+
+- Live trading, order placement, F&O  
+- Paid multi-provider market-data sprawl  
+- Multi-user / social product  
+- Treating weight-NAV rebalance backtest as SIP performance  
+- Presenting sample/synthetic prices as real SIP results  
+- Coin / mutual-fund product surface  
+
+---
+
+## v0 shipped checklist (preserved)
 
 Local-first end-to-end slice: sample/curated data → calc engine → FastAPI → Next.js dashboard.
 
 **Status:** Definition of Done met (2026-07-28). Full writeup: [docs/build-report.md](docs/build-report.md).  
-Track checklist against [docs/architecture/v0-plan.md](docs/architecture/v0-plan.md).
+Track against [docs/architecture/v0-plan.md](docs/architecture/v0-plan.md).
 
 ### Definition of Done (status)
 
@@ -19,49 +129,93 @@ Track checklist against [docs/architecture/v0-plan.md](docs/architecture/v0-plan
 - [x] **UI** — Dashboard, holdings, performance/risk, smallcase switcher (`apps/web`, routes `/`, `/holdings`, `/performance`)
 - [x] **Docs** — install+run README; data dictionary; pipeline; [how to add personal data](docs/data/how-to-add-data.md); metrics definitions; [build report](docs/build-report.md)
 - [x] **Tests** — lightweight unit tests for core calc + API smoke
+- [x] **Upstox price ingest (v0.1)** — CLI + env token + custom lookback (`--years` / `--from`/`--to`) + sample fallback; UI custom timeline + data-source banner
 
 ### Sample smallcases
+
 | id | Notes |
 |----|--------|
 | `digital-india` | IT/digital basket; custom weights; v1→v2 on 2024-01-02 |
 | `momentum-quality` | Equal-weight quality names |
 
-## Stack (binding for v0)
+### Stack (binding; reused by SIP Lab)
+
 - Frontend: Next.js (App Router) + TypeScript + Tailwind + **Recharts**
 - Backend: Python + FastAPI
 - Data: Polars/Pandas + DuckDB + Parquet under `data/curated/`
 - Layout: `data/raw`, `data/curated`, `src/`, `notebooks/`, `docs/`
 
-## Data Notes
+### Data notes
+
 Place raw files in `data/raw/`.  
 Curated outputs go in `data/curated/`.  
 Schema: [docs/data-dictionary.md](docs/data-dictionary.md).  
 Personal onboarding: [docs/data/how-to-add-data.md](docs/data/how-to-add-data.md).  
-If raw prices are empty, the sample generator writes synthetic OHLCV (label `source=sample`).
+If raw prices are empty / no Upstox token, the sample generator writes synthetic OHLCV (label `source=sample`) — **demo only**.
 
-## Decisions (closed for v0)
-- Currency / market: **INR / Indian equities friendly**; generic tickers supported
-- Target surface: **minimal web UI** (not notebook-only), with notebooks for analysis
-- Storage: **Parquet + DuckDB**, not Postgres (ADR 001, 002)
-- Chart library: **Recharts** (chosen in `apps/web`)
-- Default risk-free rate for Sharpe: **0.0** annual (`DEFAULT_RF` env; set `0.06` for India-like cash yield)
+### Decisions closed in v0 (still true)
 
-## Out of scope (v0)
+- Currency / market: **INR / Indian equities friendly**; generic tickers supported  
+- Target surface: **minimal web UI** (not notebook-only), with notebooks for analysis  
+- Storage: **Parquet + DuckDB**, not Postgres (ADR 001, 002)  
+- Chart library: **Recharts** (`apps/web`)  
+- Default risk-free rate for Sharpe: **0.0** annual (`DEFAULT_RF` env; set `0.06` for India-like cash yield)  
+- Upstox as price source evolved: optional in ADR 003 → **sole** historical provider in **ADR 005** for SIP Lab  
+
+### v0 out of scope (unchanged)
+
 Production auth, multi-user, live trading, full broker integration, FX engine, full Brinson attribution, transaction costs.
 
-## Next / in progress
-- [x] **Upstox price ingest (v0.1)** — CLI + env token + custom lookback (`--years` / `--from`/`--to`) + sample fallback; UI custom timeline + data-source banner
-- [ ] Provide live `UPSTOX_ACCESS_TOKEN` when ready for real bars (optional)
-- [ ] Optional broker `holdings_snapshots` path for “actual vs target” views
-- [ ] Single default benchmark series for relative performance (post-v0)
-- [ ] Notebooks entrypoints for ad-hoc analysis beyond the UI
-- [ ] Future one-click Upstox OAuth (not this slice — CLI first)
+---
+
+## What reuses vs what is new
+
+| Reuse from v0 | New for SIP Lab |
+|---------------|-----------------|
+| Pipeline, curated Parquet, DuckDB reads | SIP schedule + next-session invest rule |
+| Pure `calc/` patterns + tests layout | Units ledger + contribution cashflows |
+| FastAPI app shell + deps | SIP run service + XIRR (+ fixtures ≤ 1e-4) |
+| Next.js shell, theme, charts primitives | SIP Lab UI (Phase 2) |
+| Upstox client + instruments + sync | Upstox-only policy (no vendor fallbacks); V3 daily preferred |
+| Sample smallcases / basket JSON | Strategy schema (amount, day-of-month, range) |
+| Weight-NAV / rebalance `POST /backtest` | Kept for composition analysis; **not** SIP performance |
+
+---
+
+## Compare (later — Phase 4)
+
+**Idea:** live equity book vs SIP backtest of the same strategy.  
+**Import path:** Kite Connect equity holdings (founder uses Kite for equities).  
+**Not this workflow’s full implementation** — roadmap Phase 4 only; market data remains Upstox.  
+See [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/integrations/kite-connect.md](docs/integrations/kite-connect.md).
+
+**Coin / MF:** planned after Kite; **do not** implement Coin APIs or MF NAV this version.
+
+---
 
 ## Green path (reminder)
+
 ```bash
 make demo    # install + pipeline + tests
 make api     # :8000
 make web     # :3000
 ```
 
-Update this file as goals complete or priorities shift.
+Real multi-year prices (when ready): set Upstox env vars → sync → pipeline → SIP run (engine once Phase 1 lands). Without a token, demo/sample path only.
+
+---
+
+## Source-of-truth map
+
+| Doc | Role |
+|-----|------|
+| **This file** | Product vision, binding rules, v0 checklist, phase index |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phased delivery, exit criteria, sequencing |
+| [ADR 004](docs/decisions/004-sip-lab-prd-decisions.md) | Founder-approved SIP Lab PRD decisions |
+| [ADR 005](docs/decisions/005-upstox-sole-market-data.md) | Upstox sole historical market data |
+| [docs/integrations/upstox.md](docs/integrations/upstox.md) | Auth, API contracts, sync operator notes |
+| [docs/integrations/kite-connect.md](docs/integrations/kite-connect.md) | Phase 4 plan only (no runtime) |
+| [docs/build-report.md](docs/build-report.md) | What v0 actually shipped |
+| [README.md](README.md) | Install and run |
+
+Update this file when goals complete or priorities shift. Prefer ADRs + ROADMAP for detailed decisions and phase exits; keep PRODUCT as the short vision + status surface.
