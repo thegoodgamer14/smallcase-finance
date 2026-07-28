@@ -35,6 +35,11 @@ DATA_CURATED_ROOT: Path = Path(
     os.environ.get("DATA_CURATED_ROOT", _REPO_ROOT / "data" / "curated")
 ).expanduser().resolve()
 
+# File-backed SIP strategies (YAML/JSON). Overridable for tests.
+STRATEGIES_DIR: Path = Path(
+    os.environ.get("STRATEGIES_DIR", _REPO_ROOT / "config" / "strategies")
+).expanduser().resolve()
+
 DEFAULT_CURRENCY: str = os.environ.get("DEFAULT_CURRENCY", "INR")
 PERIODS_PER_YEAR: int = int(os.environ.get("PERIODS_PER_YEAR", "252"))
 DEFAULT_RF: float = float(os.environ.get("DEFAULT_RF", "0.0"))
