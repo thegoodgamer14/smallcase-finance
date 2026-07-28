@@ -133,3 +133,130 @@ export interface ChartSeries {
   strokeDasharray?: string;
   type?: "line" | "area";
 }
+
+// ── SIP Lab ──────────────────────────────────────────────────────────────────
+
+/** Result-scoped price provenance for demo vs Upstox banners. */
+export type SipDataSource =
+  | "upstox"
+  | "sample"
+  | "fixture"
+  | "mixed"
+  | "unknown";
+
+export interface StrategySummary {
+  id: string;
+  name: string;
+  summary?: string | null;
+  currency: string;
+  sip_amount: number;
+  day_of_month: number;
+  start_date: string;
+  end_date?: string | null;
+  allocation_mode: string;
+  n_constituents?: number | null;
+  version: string;
+}
+
+export interface StrategyListResponse {
+  items: StrategySummary[];
+}
+
+export interface StrategyDetail {
+  id: string;
+  name: string;
+  currency: string;
+  version: string;
+  notes?: string | null;
+  allocation_mode: string;
+  price_field: string;
+  rebalance_mode: string;
+  fractional_units: boolean;
+  basket: Record<string, unknown>;
+  sip: Record<string, unknown>;
+  costs: Record<string, unknown>;
+  source_path?: string | null;
+}
+
+export interface SipBacktestRequest {
+  strategy_id?: string;
+  strategy?: Record<string, unknown>;
+  amount?: number;
+  day_of_month?: number;
+  start?: string;
+  end?: string;
+  as_of?: string;
+}
+
+export interface SipCashflow {
+  date: string;
+  amount: number;
+  kind: string;
+}
+
+export interface SipSeriesPoint {
+  date: string;
+  market_value: number;
+  total_invested_to_date: number;
+  has_sip: boolean;
+}
+
+export interface SipSymbolContribution {
+  symbol: string;
+  cash_in: number;
+  units_end: number;
+  price_end?: number | null;
+  market_value_end: number;
+  contribution: number;
+  weight_end?: number | null;
+}
+
+export interface SipAssumptions {
+  primary_metric: string;
+  sip_day_rule: string;
+  costs: string;
+  costs_zero: boolean;
+  price_field: string;
+  xirr_day_count: string;
+  fractional_units: boolean;
+  currency: string;
+  rebalance_mode: string;
+  not_v0_rebalance: boolean;
+}
+
+export interface SipMetrics {
+  total_invested: number;
+  final_value: number;
+  absolute_gain: number;
+  n_sips: number;
+  first_sip?: string | null;
+  last_sip?: string | null;
+  as_of?: string | null;
+  max_drawdown?: number | null;
+  volatility?: number | null;
+  cagr_mv?: number | null;
+  xirr_status: string;
+  xirr_message?: string | null;
+  xirr_day_count: string;
+}
+
+export interface SipBacktestResponse {
+  strategy_id: string;
+  name?: string | null;
+  xirr: number | null;
+  total_invested: number;
+  final_value: number;
+  max_drawdown?: number | null;
+  absolute_gain?: number | null;
+  n_sips: number;
+  series: SipSeriesPoint[];
+  cashflows: SipCashflow[];
+  data_source: SipDataSource | string;
+  assumptions: SipAssumptions;
+  warnings: string[];
+  invest_dates: string[];
+  units_end: Record<string, number>;
+  contribution: SipSymbolContribution[];
+  metrics?: SipMetrics | null;
+  notes?: string;
+}

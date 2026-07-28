@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  FlaskConical,
   LayoutDashboard,
   PieChart,
 } from "lucide-react";
@@ -24,6 +25,7 @@ const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/holdings", label: "Holdings", icon: PieChart },
   { href: "/performance", label: "Performance", icon: Activity },
+  { href: "/sip-lab", label: "SIP Lab", icon: FlaskConical },
 ] as const;
 
 function navActive(pathname: string, href: string): boolean {
@@ -46,6 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   } = useApp();
 
   const asOf = activeSmallcase?.as_of;
+  const isSipLab = pathname.startsWith("/sip-lab");
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-app)] text-[var(--text-primary)]">
@@ -61,14 +64,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="hidden flex-1 md:block" />
 
-        <SmallcaseSelect
-          items={toOptions(smallcases)}
-          value={smallcaseId}
-          onChange={setSmallcaseId}
-          loading={smallcasesLoading}
-        />
+        {!isSipLab ? (
+          <SmallcaseSelect
+            items={toOptions(smallcases)}
+            value={smallcaseId}
+            onChange={setSmallcaseId}
+            loading={smallcasesLoading}
+          />
+        ) : null}
 
-        {asOf ? (
+        {asOf && !isSipLab ? (
           <span className="hidden text-xs text-[var(--text-muted)] sm:inline">
             As-of {formatDate(asOf)}
           </span>
@@ -100,35 +105,43 @@ export function AppShell({ children }: { children: ReactNode }) {
             })}
           </nav>
 
-          <div className="mt-auto space-y-3 border-t border-[var(--border-subtle)] pt-4">
-            <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
-              Range
-            </p>
-            <RangeChips
-              value={customRange ? null : window}
-              onChange={setWindow}
-              className="px-0.5"
-            />
-            <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
-              Custom timeline
-            </p>
-            <CustomRangePicker
-              value={customRange}
-              onChange={setCustomRange}
-              className="px-0.5"
-            />
-            {customRange ? (
-              <p className="px-1 text-[11px] text-[var(--accent)]">
-                Evaluating {customRange.start} → {customRange.end}
+          {!isSipLab ? (
+            <div className="mt-auto space-y-3 border-t border-[var(--border-subtle)] pt-4">
+              <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                Range
               </p>
-            ) : null}
-            {activeSmallcase ? (
+              <RangeChips
+                value={customRange ? null : window}
+                onChange={setWindow}
+                className="px-0.5"
+              />
+              <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                Custom timeline
+              </p>
+              <CustomRangePicker
+                value={customRange}
+                onChange={setCustomRange}
+                className="px-0.5"
+              />
+              {customRange ? (
+                <p className="px-1 text-[11px] text-[var(--accent)]">
+                  Evaluating {customRange.start} → {customRange.end}
+                </p>
+              ) : null}
+              {activeSmallcase ? (
+                <p className="px-1 text-[11px] text-[var(--text-muted)]">
+                  {activeSmallcase.name}
+                  {activeSmallcase.theme ? ` · ${activeSmallcase.theme}` : ""}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <div className="mt-auto border-t border-[var(--border-subtle)] pt-4">
               <p className="px-1 text-[11px] text-[var(--text-muted)]">
-                {activeSmallcase.name}
-                {activeSmallcase.theme ? ` · ${activeSmallcase.theme}` : ""}
+                SIP window is set in the form (start / end).
               </p>
-            ) : null}
-          </div>
+            </div>
+          )}
         </aside>
 
         {/* Main */}

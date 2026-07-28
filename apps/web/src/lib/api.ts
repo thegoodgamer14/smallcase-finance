@@ -3,8 +3,12 @@ import type {
   HoldingsResponse,
   MetricsResponse,
   PerformanceResponse,
+  SipBacktestRequest,
+  SipBacktestResponse,
   SmallcaseDetail,
   SmallcaseListResponse,
+  StrategyDetail,
+  StrategyListResponse,
   WindowKey,
 } from "./types";
 import { toApiWindow } from "./windows";
@@ -147,4 +151,31 @@ export async function getMetricsMulti(
     if (r.status === "fulfilled") out[windows[i]] = r.value;
   });
   return out;
+}
+
+// ── SIP Lab ──────────────────────────────────────────────────────────────────
+
+/** File-backed SIP strategies under config/strategies/. */
+export function listStrategies(): Promise<StrategyListResponse> {
+  return apiFetch<StrategyListResponse>("/strategies");
+}
+
+export function getStrategy(id: string): Promise<StrategyDetail> {
+  return apiFetch<StrategyDetail>(
+    `/strategies/${encodeURIComponent(id)}`,
+  );
+}
+
+/**
+ * Run monthly SIP cashflow backtest (primary metric XIRR).
+ * Uses POST /backtests/sip — never the v0 rebalance POST /backtest.
+ */
+export function postSipBacktest(
+  body: SipBacktestRequest,
+): Promise<SipBacktestResponse> {
+  return apiFetch<SipBacktestResponse>("/backtests/sip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }

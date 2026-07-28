@@ -10,6 +10,9 @@ interface MetricCardProps {
   sentiment?: Sentiment;
   delta?: string | null;
   deltaSentiment?: Sentiment;
+  /** Always-visible microcopy under the value (preferred over hover-only title). */
+  sublabel?: string;
+  /** Native title tooltip — keep short product gloss only; no engine/fixture jargon. */
   hint?: string;
   loading?: boolean;
   onClick?: () => void;
@@ -24,6 +27,7 @@ export function MetricCard({
   sentiment = "none",
   delta,
   deltaSentiment,
+  sublabel,
   hint,
   loading = false,
   onClick,
@@ -48,7 +52,7 @@ export function MetricCard({
     <>
       <div className="h-3 w-16 animate-pulse rounded bg-[var(--bg-muted)]" />
       <div className="mt-2 h-7 w-24 animate-pulse rounded bg-[var(--bg-muted)]" />
-      {size === "default" ? (
+      {size === "default" || sublabel ? (
         <div className="mt-2 h-3 w-20 animate-pulse rounded bg-[var(--bg-muted)]" />
       ) : null}
     </>
@@ -63,8 +67,15 @@ export function MetricCard({
         {display}
       </span>
       {delta ? (
-        <span className={`text-xs tabular-nums ${deltaColor || "text-[var(--text-secondary)]"}`}>
+        <span
+          className={`text-xs tabular-nums ${deltaColor || "text-[var(--text-secondary)]"}`}
+        >
           {delta}
+        </span>
+      ) : null}
+      {sublabel ? (
+        <span className="text-[11px] leading-snug text-[var(--text-muted)]">
+          {sublabel}
         </span>
       ) : null}
     </>

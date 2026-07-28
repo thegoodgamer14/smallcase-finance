@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorBanner } from "@/components/feedback/ErrorBanner";
 import { RangeChips } from "@/components/filters/RangeChips";
 import { MetricCard } from "@/components/kpis/MetricCard";
+import { SipDashCallout } from "@/components/sip/SipDashCallout";
 import {
   getHoldings,
   getMetrics,
@@ -221,6 +222,8 @@ export default function DashboardPage() {
           }}
         />
       ) : null}
+
+      <SipDashCallout />
 
       {/* KPI strip */}
       <section className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
