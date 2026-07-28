@@ -1,0 +1,41 @@
+# Example equity SIP basket — SIP Lab Phase 0 scaffold
+# Load: load_strategy_config("config/strategies/example-sip-equity.yaml")
+# Prices for real runs: Upstox only (ADR 005). Sample prices = demo only.
+
+strategy_id: example-sip-equity
+name: Example Equity SIP Basket
+currency: INR
+version: "1"
+notes: >
+  Sample custom basket for SIP Lab config validation and offline demos.
+  Weights are illustrative. Not investment advice.
+
+allocation_mode: custom_weights
+price_field: close
+rebalance_mode: none
+fractional_units: true
+
+basket:
+  kind: inline
+  constituents:
+    - symbol: TCS
+      target_weight: 0.25
+    - symbol: INFY
+      target_weight: 0.25
+    - symbol: RELIANCE
+      target_weight: 0.25
+    - symbol: HDFCBANK
+      target_weight: 0.25
+
+sip:
+  amount: 5000
+  day_of_month: 5
+  start_date: 2023-01-01
+  end_date: null
+  as_of: null
+
+costs:
+  brokerage_bps: 0
+  stt_bps: 0
+  slippage_bps: 0
+  flat_fee: 0
