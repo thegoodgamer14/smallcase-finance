@@ -9,21 +9,36 @@ Or with package on PYTHONPATH::
     uvicorn smallcase_finance.main:app --reload
 
 OpenAPI: http://127.0.0.1:8000/docs
+
+Render free tier: see docs/deploy/render.md
 """
 
 from __future__ import annotations
+
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from smallcase_finance import __version__
-from smallcase_finance.api.routes import backtest, health, integrations, smallcases
+from smallcase_finance.api.routes import backtest, health, integrations, oauth, smallcases
 
-# Local Next.js (and common dev ports). No credentials in v0.
-_CORS_ORIGINS = [
+# Local Next.js defaults. Extra origins via CORS_ORIGINS (comma-separated), e.g.
+# https://your-app.vercel.app for a free frontend deploy.
+_DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+
+
+def _cors_origins() -> list[str]:
+    extra = os.environ.get("CORS_ORIGINS", "").strip()
+    if not extra:
+        return list(_DEFAULT_CORS_ORIGINS)
+    origins = [o.strip() for o in extra.split(",") if o.strip()]
+    # Always keep local UI origins for hybrid local frontend + remote API.
+    merged = list(dict.fromkeys(_DEFAULT_CORS_ORIGINS + origins))
+    return merged
 
 
 def create_app() -> FastAPI:
@@ -33,13 +48,14 @@ def create_app() -> FastAPI:
         version=__version__,
         description=(
             "Local-first smallcase composition, NAV, performance, and metrics. "
-            "Contracts: docs/architecture/backend.md §6 · docs/api.md."
+            "Contracts: docs/architecture/backend.md §6 · docs/api.md. "
+            "Deploy: docs/deploy/render.md."
         ),
     )
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_CORS_ORIGINS,
+        allow_origins=_cors_origins(),
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -49,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(smallcases.router)
     app.include_router(backtest.router)
     app.include_router(integrations.router)
+    app.include_router(oauth.router)
 
     return app
 
