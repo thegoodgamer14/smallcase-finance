@@ -9,7 +9,7 @@ Users want real multi-year equity history for local smallcase backtests. Smallca
 
 ## Decision
 
-1. **Optional integration** behind env credentials (`UPSTOX_ACCESS_TOKEN` / `UPSTOX_API_KEY`).
+1. **Optional integration** behind env credentials (`UPSTOX_ACCESS_TOKEN` primary Bearer; `UPSTOX_API_KEY` / `UPSTOX_API_SECRET` for OAuth).
 2. Sync writes **raw drops** under `data/raw/prices/{yyyy-mm-dd}_upstox/`; the existing pipeline remains the path to curated Parquet.
 3. **Custom lookback** is first-class: `--years N` or `--from` / `--to` (inclusive).
 4. **Sample synthetic data stays** the default when credentials are missing (clear warnings; no hard failure for demos).
