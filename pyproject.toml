@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smallcase-finance"
+version = "0.0.1"
+description = "Local-first Smallcase-style thematic portfolio toolkit"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.0",
+  "polars>=1.0",
+  "pyarrow>=14.0",
+  "duckdb>=1.0",
+  "pytz>=2024.1",
+  "pandas>=2.0",
+  "numpy>=1.26",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+smallcase-pipeline = "smallcase_finance.pipeline.run:main"
+smallcase-upstox-sync = "smallcase_finance.integrations.upstox.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

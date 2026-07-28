@@ -1,0 +1,27 @@
+{
+  "smallcase_id": "momentum-quality",
+  "name": "Momentum Quality",
+  "theme": "Quality compounders",
+  "description": "Small equal-weight basket of quality large caps for a second demo smallcase.",
+  "methodology": "equal_weight",
+  "rebalance_rule": "manual",
+  "base_nav": 100.0,
+  "currency": "INR",
+  "inception_date": "2023-01-02",
+  "notes": "Sample definition. Equal weights across five names.",
+  "versions": [
+    {
+      "effective_from": "2023-01-02",
+      "effective_to": null,
+      "version_label": "v1",
+      "constituents": [
+        { "symbol": "RELIANCE", "target_weight": 0.20 },
+        { "symbol": "HDFCBANK", "target_weight": 0.20 },
+        { "symbol": "ICICIBANK", "target_weight": 0.20 },
+        { "symbol": "BHARTIARTL", "target_weight": 0.20 },
+        { "symbol": "ASIANPAINT", "target_weight": 0.20 }
+      ]
+    }
+  ],
+  "rebalance_events": []
+}

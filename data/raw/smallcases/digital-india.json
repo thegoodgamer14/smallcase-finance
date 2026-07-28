@@ -1,0 +1,49 @@
+{
+  "smallcase_id": "digital-india",
+  "name": "Digital India",
+  "theme": "IT & digital services",
+  "description": "Equal-ish basket of large Indian IT / digital names for v0 demo and backtests.",
+  "methodology": "custom_weights",
+  "rebalance_rule": "quarterly",
+  "base_nav": 100.0,
+  "currency": "INR",
+  "inception_date": "2023-01-02",
+  "notes": "Sample definition for pipeline + UI demo. Weights are illustrative only.",
+  "versions": [
+    {
+      "effective_from": "2023-01-02",
+      "effective_to": "2023-12-29",
+      "version_label": "v1",
+      "constituents": [
+        { "symbol": "TCS", "target_weight": 0.20 },
+        { "symbol": "INFY", "target_weight": 0.20 },
+        { "symbol": "HCLTECH", "target_weight": 0.15 },
+        { "symbol": "WIPRO", "target_weight": 0.15 },
+        { "symbol": "TECHM", "target_weight": 0.15 },
+        { "symbol": "LTIM", "target_weight": 0.15 }
+      ]
+    },
+    {
+      "effective_from": "2024-01-02",
+      "effective_to": null,
+      "version_label": "v2",
+      "constituents": [
+        { "symbol": "TCS", "target_weight": 0.22 },
+        { "symbol": "INFY", "target_weight": 0.22 },
+        { "symbol": "HCLTECH", "target_weight": 0.16 },
+        { "symbol": "WIPRO", "target_weight": 0.12 },
+        { "symbol": "TECHM", "target_weight": 0.14 },
+        { "symbol": "LTIM", "target_weight": 0.14 }
+      ]
+    }
+  ],
+  "rebalance_events": [
+    {
+      "rebalance_date": "2024-01-02",
+      "reason": "scheduled_quarterly",
+      "from_effective_from": "2023-01-02",
+      "to_effective_from": "2024-01-02",
+      "notes": "v1 → v2 weight refresh"
+    }
+  ]
+}
