@@ -21,7 +21,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from smallcase_finance import __version__
-from smallcase_finance.api.routes import backtest, health, integrations, oauth, smallcases
+from smallcase_finance.api.routes import (
+    backtest,
+    health,
+    integrations,
+    oauth,
+    sip_backtest,
+    smallcases,
+    strategies,
+)
 
 # Local Next.js defaults. Extra origins via CORS_ORIGINS (comma-separated), e.g.
 # https://your-app.vercel.app for a free frontend deploy.
@@ -42,13 +50,14 @@ def _cors_origins() -> list[str]:
 
 
 def create_app() -> FastAPI:
-    """Build the FastAPI application with v0 routers."""
+    """Build the FastAPI application with v0 + SIP Lab routers."""
     app = FastAPI(
         title="Smallcase Finance API",
         version=__version__,
         description=(
-            "Local-first smallcase composition, NAV, performance, and metrics. "
-            "Contracts: docs/architecture/backend.md §6 · docs/api.md. "
+            "Local-first smallcase composition, NAV, performance, metrics, "
+            "and SIP Lab (monthly SIP + XIRR). "
+            "Contracts: docs/architecture/backend.md · docs/api.md. "
             "Deploy: docs/deploy/render.md."
         ),
     )
@@ -64,6 +73,8 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(smallcases.router)
     app.include_router(backtest.router)
+    app.include_router(strategies.router)
+    app.include_router(sip_backtest.router)
     app.include_router(integrations.router)
     app.include_router(oauth.router)
 

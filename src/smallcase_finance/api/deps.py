@@ -8,7 +8,9 @@ from smallcase_finance.config import DATA_CURATED_ROOT
 from smallcase_finance.services.backtest_service import BacktestService
 from smallcase_finance.services.metrics_service import MetricsService
 from smallcase_finance.services.performance_service import NavService, PerformanceService
+from smallcase_finance.services.sip_service import SipService
 from smallcase_finance.services.smallcase_service import SmallcaseService
+from smallcase_finance.services.strategy_service import StrategyService
 
 
 def get_curated_root() -> Path:
@@ -33,3 +35,11 @@ def get_metrics_service() -> MetricsService:
 
 def get_backtest_service() -> BacktestService:
     return BacktestService()
+
+
+def get_sip_service() -> SipService:
+    return SipService()
+
+
+def get_strategy_service() -> StrategyService:
+    return StrategyService()
