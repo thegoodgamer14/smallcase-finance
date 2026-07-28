@@ -1,734 +1,553 @@
 # SIP Lab — Page Spec (`/sip-lab`)
 
+**Status:** Implementation-ready (P2 UI)  
 **Audience:** Frontend agent  
-**Product:** SIP Lab / Basket Backtest Engine (P2 UI)  
-**Job to be done:** *Configure a monthly SIP into my basket, run a backtest, and trust the XIRR + path.*  
-**Route:** `/sip-lab` (App Router `app/sip-lab/page.tsx`)  
-**Shell:** Global layout (top bar + left nav). See [ui.md](../../architecture/ui.md).  
+**Product:** SIP Lab / Basket Backtest Engine  
+**Job to be done:** *External visitor (or founder) understands and runs a monthly SIP basket backtest without prior product knowledge — and trusts the XIRR.*  
+**Route:** `/sip-lab` → `app/sip-lab/page.tsx`  
+**Shell:** Global `AppShell` (top bar + left nav). See [ui.md](../../architecture/ui.md).  
 **Visual language:** [design-system.md](../design-system.md) · [components.md](../components.md)  
+**External copy / glossary:** [sip-lab-external.md](../copy/sip-lab-external.md)  
 **Product rules:** [PRD](../../product/prd-sip-lab.md) · [ADR 004](../../decisions/004-sip-lab-prd-decisions.md) · [ADR 005](../../decisions/005-upstox-sole-market-data.md)
 
-**Primary metric:** **XIRR** (not v0 weight-NAV total return).  
-**Data source (binding):** Upstox OHLCV only for real claims; sample/demo must be labeled.
+| Binding rule | Value |
+|--------------|-------|
+| Primary metric | **XIRR** (not v0 weight-NAV total return) |
+| SIP day | Fixed calendar day-of-month → **next trading day** if market closed |
+| Costs | **Zero** MVP |
+| History | **Upstox only** for real claims; sample/synthetic OK if labeled **demo** |
+| API | `POST /sip/backtest` only — **never** `POST /backtest` (v0 rebalance) |
 
 ---
 
-## 0. IA & nav changes
+## 0. First-time visitor journey (top → bottom)
 
-### Left nav (extend existing `AppShell` NAV)
+Order is fixed. Desktop-first; config sticky left, results scroll right (≥1280). On narrower screens, stack in this same section order.
 
-| Order | Label | Route | Icon (Lucide suggestion) |
-|------:|-------|-------|--------------------------|
-| 1 | Dashboard | `/` | `LayoutDashboard` |
-| 2 | Holdings | `/holdings` | `PieChart` |
-| 3 | Performance | `/performance` | `Activity` |
-| 4 | **SIP Lab** | `/sip-lab` | `FlaskConical` or `LineChart` |
-
-- Active state: same as v0 — `bg-[var(--accent-subtle)] text-[var(--accent)]`.
-- Optional nav divider above SIP Lab if it reads as a distinct “lab” surface (not required).
-
-### Top bar on SIP Lab
-
-| Control | Behavior on `/sip-lab` |
-|---------|------------------------|
-| Brand | Unchanged |
-| SmallcaseSelect | **Optional seed** for “load basket from smallcase” — not the sole strategy source. Prefer strategy picker inside page when strategies exist. |
-| RangeChips / CustomRange | **Hide or disable** on SIP Lab. SIP range is **start/end on the form**, not global performance window. |
-| As-of badge | Keep for curated price as-of when available |
-| ThemeToggle | Unchanged |
-| DataSourceBanner | **Always visible** (global); SIP results also show an in-page source chip (see §6) |
-
-Rationale: SIP is a **run-oriented lab**, not a passive browse of curated NAV. Global range chips would fight SIP start/end.
-
-### Future routes (do not implement this version)
-
-| Route / surface | Status |
-|-----------------|--------|
-| Coin / MF import | Deferred — Coin last |
-| Kite equity holdings import | Phase 4 |
-| Live portfolio vs SIP compare | Phase 4 |
-| Multi-strategy side-by-side | P3+ |
-
-Note in UI only as muted “Coming later” if empty-state CTAs need a slot — **no fake forms**.
-
----
-
-## 1. Layout (desktop ≥1280px)
-
-Two-zone lab: **config (left sticky)** + **results (right scroll)**. Desktop-first density.
+| # | Section | Anchor | Purpose for first-timer |
+|---|---------|--------|-------------------------|
+| 1 | **Hero** | `#hero` | Name the product, one job, primary metric (XIRR) in plain language |
+| 2 | **Data source chip strip** | `#data-source` | Immediately show demo vs Upstox so numbers are not misread |
+| 3 | **Configure** | `#configure` | Basket + SIP amount/day/dates + **Run backtest** |
+| 4 | **Methodology accordion** | `#methodology` | Expandable “How this works” (zero costs, day rule, XIRR, not v0 NAV) |
+| 5 | **Results** | `#results` | Empty → loading → error → success (XIRR hero, invested vs final, charts, tables) |
+| 6 | **How to read results** | `#how-to-read` | Plain-language guide under results (always visible after first paint of results column) |
+| 7 | **Assumptions footer** | `#assumptions` | Micro audit line: day rule, costs 0, source field, source, range |
 
 ```
 ┌─ App shell ──────────────────────────────────────────────────────────────────┐
-│ DataSourceBanner (Upstox configured | Sample demo)                           │
-│ TopBar: Logo · [optional strategy/smallcase seed] · Theme                    │
-├─ LeftNav ─┬─ Main max-w-[1440px] mx-auto px-6 py-6 ──────────────────────────┤
+│ DataSourceBanner (global)                                                    │
+│ TopBar: Logo · Theme  (hide global RangeChips on this route)                 │
+├─ LeftNav ─┬─ Main max-w-[1440px] mx-auto px-6 py-6 gap-6 ────────────────────┤
 │ Dashboard │                                                                  │
-│ Holdings  │  Header: “SIP Lab” · subtitle methodology one-liner              │
-│ Perf      │                                                                  │
-│ SIP Lab ● │  ┌─ grid grid-cols-12 gap-6 ───────────────────────────────────┐ │
-│           │  │                                                             │ │
-│           │  │  col-span-4  (sticky top-20 self-start)                     │ │
-│           │  │  ┌ StrategyEditor ───────────────────────────────────────┐  │ │
-│           │  │  │ Basket select / edit · constituents table · weights   │  │ │
-│           │  │  └───────────────────────────────────────────────────────┘  │ │
-│           │  │  ┌ SipParamsForm ────────────────────────────────────────┐  │ │
-│           │  │  │ Amount · day-of-month · start · end · allocation mode │  │ │
-│           │  │  │ [Run backtest]  primary CTA                           │  │ │
-│           │  │  │ [Export ▾] disabled until result                      │  │ │
-│           │  │  └───────────────────────────────────────────────────────┘  │ │
-│           │  │  ┌ MethodologyWarnings (collapsible) ────────────────────┐  │ │
-│           │  │  │ Zero costs · day rule · sample vs Upstox · not v0 NAV │  │ │
-│           │  │  └───────────────────────────────────────────────────────┘  │ │
-│           │  │                                                             │ │
-│           │  │  col-span-8                                                 │ │
-│           │  │  ┌ Empty | Loading | Error | Results ────────────────────┐  │ │
-│           │  │  │ DataSourceStatus chip (result-scoped)                 │  │ │
-│           │  │  │ KPI: XIRR (hero) + secondary metrics                  │  │ │
-│           │  │  │ Equity / market-value curve                           │  │ │
-│           │  │  │ Drawdown (optional secondary)                         │  │ │
-│           │  │  │ Contribution / cashflow tables                        │  │ │
-│           │  │  │ Assumptions footer                                    │  │ │
-│           │  │  └───────────────────────────────────────────────────────┘  │ │
-│           │  └─────────────────────────────────────────────────────────────┘ │
+│ Holdings  │  §1 HERO                                                         │
+│ Perf      │  §2 DATA SOURCE (page-level chip; result chip repeats after run) │
+│ SIP Lab ● │                                                                  │
+│           │  grid 4+8                                                        │
+│           │  ┌ CONFIG (sticky) ──────┐  ┌ RESULTS ────────────────────────┐  │
+│           │  │ §3 Strategy + SIP     │  │ Empty | Loading | Error | Data  │  │
+│           │  │ Run · Export          │  │ XIRR KPIs · MV chart · tables   │  │
+│           │  │ §4 Methodology ▾      │  │ §6 How to read                  │  │
+│           │  └───────────────────────┘  │ §7 Assumptions footer           │  │
+│           │                             └─────────────────────────────────┘  │
 └───────────┴──────────────────────────────────────────────────────────────────┘
 ```
 
-**Vertical rhythm:** section gap `gap-6` (24px) inside columns; form fields `gap-3`–`gap-4`.
+**Vertical rhythm:** section `gap-6`; form fields `gap-3`–`gap-4`.
 
 ### Breakpoints
 
 | Width | Behavior |
 |-------|----------|
-| ≥1280 | 4 + 8 columns; config sticky |
-| 768–1279 | Single column: config first, results below; sticky off |
-| <768 | Full stack; tables horizontal-scroll; CTA full-width |
+| ≥1280 | `grid-cols-12`: config `col-span-4` sticky `top-20`; results `col-span-8` |
+| 768–1279 | Single column: hero → data source → config → methodology → results |
+| <768 | Full stack; tables `overflow-x-auto`; CTA full-width |
 
 ---
 
-## 2. Page header
+## 1. Exact copy strings (locked)
+
+Frontend must use these strings (or the glossary file) — do not improvise marketing.
+
+### 1.1 Hero
+
+| Key | Copy |
+|-----|------|
+| `hero.title` | `SIP Lab` |
+| `hero.subtitle` | `See what a monthly SIP into a stock/ETF basket would have returned.` |
+| `hero.metric_line` | `Primary result: XIRR — the annualized return on every contribution plus your ending portfolio value.` |
+| `hero.scope_line` | `Equities & ETFs only · Zero transaction costs in this version · Not live trading` |
+| `hero.link_methodology` | `How SIP Lab works` → `#methodology` |
+| `hero.link_glossary` | `Glossary` → can open methodology panel section or tooltip set; optional |
+
+**Typography**
 
 ```
-flex flex-col gap-1 mb-2
-h1: text-xl font-semibold text-[var(--text-primary)]  →  “SIP Lab”
-p:  text-sm text-[var(--text-secondary)]
-    →  “Monthly SIP into a custom equity/ETF basket · XIRR primary · Upstox history”
+h1: text-xl font-semibold text-[var(--text-primary)]
+subtitle: text-sm text-[var(--text-secondary)] max-w-2xl
+metric_line: text-sm text-[var(--text-primary)] mt-1
+scope_line: text-xs text-[var(--text-muted)] mt-1
 ```
 
-No marketing hero. Optional right-side link: “How SIP differs from Performance NAV →” → expand methodology panel or anchor `#methodology`.
+No marketing illustration. No “Invest now”.
+
+### 1.2 XIRR definition (one-liner)
+
+| Key | Copy |
+|-----|------|
+| `xirr.definition` | `XIRR is the single annualized rate that makes all your SIP cash outflows and the final portfolio value balance out over time.` |
+| `xirr.tooltip` | `Uses contribution dates and amounts plus terminal market value. Engine fixture tolerance ≤ 0.0001. Not the same as a simple “total return” on a rebalanced NAV index.` |
+| `xirr.kpi_label` | `XIRR` |
+| `xirr.null` | `Need at least two cashflows` |
+| `xirr.sublabel_template` | `{start_label} → {end_label} · SIP day {day} → next session if closed` |
+
+### 1.3 Invested vs final value
+
+| Key | Copy |
+|-----|------|
+| `invested.label` | `Total invested` |
+| `invested.hint` | `Sum of all monthly SIP contributions (cash you put in).` |
+| `final.label` | `Final value` |
+| `final.hint` | `Market value of units held at the end date (what the basket is worth).` |
+| `gain.label` | `Absolute gain` |
+| `gain.hint` | `Final value minus total invested. Positive means the basket grew more than cash put in.` |
+| `compare.helper` | `Invested is cash in. Final value is what those units are worth. XIRR annualizes the path between them.` |
+
+### 1.4 Demo vs Upstox warning
+
+| Key | When | Copy |
+|-----|------|------|
+| `source.upstox.chip` | `data_source === 'upstox'` | `Prices: Upstox (cached)` |
+| `source.sample.chip` | `data_source === 'sample'` | `Demo / sample prices — not live market SIP performance` |
+| `source.partial.chip` | partial coverage | `Partial Upstox coverage · some symbols sample or missing` |
+| `source.sample.banner` | sample result | `These results use demo or sample prices. Do not treat them as real market SIP performance. Connect Upstox and sync history for real claims.` |
+| `source.upstox.banner` | upstox result | `Prices from Upstox-cached curated history. Sole market-data source for real runs.` |
+| `source.pre_run.upstox` | token present | `Run will use curated prices (Upstox sync path).` |
+| `source.pre_run.sample` | no token / sample only | `No Upstox token configured — run will use demo/sample prices.` |
+| `source.global_note` | always (hero or chip strip) | `Real history: Upstox only. Sample data is labeled Demo.` |
+
+**Visual rules (ADR 005)**
+
+- Sample: `Badge warning` + optional left stripe on XIRR card `border-l-2 border-[var(--risk-warning)]`
+- Upstox: `Badge info` (accent subtle)
+- Never show tokens/keys
+- Never imply sample = Upstox
+
+### 1.5 Configure / CTA / empty / error (quick index)
+
+| Key | Copy |
+|-----|------|
+| `config.strategy_title` | `Basket` |
+| `config.sip_title` | `SIP parameters` |
+| `config.amount_label` | `Monthly amount` |
+| `config.day_label` | `SIP day (calendar)` |
+| `config.day_helper` | `If that day is not a trading session, we invest on the next session with prices.` |
+| `config.start_label` | `Start date` |
+| `config.end_label` | `End date` |
+| `config.end_latest` | `To latest available price` |
+| `config.allocation_custom` | `Custom weights` |
+| `config.allocation_equal` | `Equal weight` |
+| `cta.run` | `Run backtest` |
+| `cta.running` | `Running…` |
+| `cta.export` | `Export` |
+| `cta.export_csv` | `Cashflows CSV` |
+| `cta.export_json` | `Summary JSON` |
+| `stale.banner` | `Parameters changed — re-run to update results.` |
+
+Full empty/error/loading strings: **§5**.
+
+### 1.6 How to read results
+
+| Key | Copy |
+|-----|------|
+| `howto.title` | `How to read these results` |
+| `howto.xirr` | `Start with XIRR. It answers: “If I had SIP’d this amount every month, what annualized return would I have earned?”` |
+| `howto.invested_final` | `Total invested is cash contributed. Final value is what the holdings are worth at the end. The gap is absolute gain or loss — not annualized.` |
+| `howto.chart` | `The portfolio value line is market value of units over time. The dashed line (if shown) is cumulative cash invested.` |
+| `howto.cashflows` | `The cashflow table is what XIRR uses: each SIP (outflow) and the terminal value (inflow). Sign convention matches the engine export.` |
+| `howto.drawdown` | `Max drawdown is the worst peak-to-trough drop in portfolio market value — path risk, not XIRR.` |
+| `howto.not_v0` | `Dashboard and Performance show weight-based NAV rebalance demos. Those are not SIP XIRR. Do not compare them directly without care.` |
+
+### 1.7 Methodology accordion body (MVP fixed blocks)
+
+| Id | Severity | Title | Body |
+|----|----------|-------|------|
+| `zero_costs` | info | `Zero costs` | `This version assumes zero brokerage, STT, stamp duty, slippage, and expense drag. Each SIP buys at the session close (or documented price field) for the full monthly amount.` |
+| `sip_day` | info | `SIP day rule` | `Contributions use a fixed calendar day of the month. If markets are closed that day, the SIP invests on the next trading day with available prices.` |
+| `xirr_primary` | info | `XIRR is primary` | `Headline performance is XIRR on cashflows (contributions + terminal value). Path metrics (drawdown, market-value curve) support the story but do not replace XIRR.` |
+| `not_v0` | warning | `Not the Dashboard NAV backtest` | `SIP Lab is not the weight-NAV rebalance backtest used on Dashboard/Performance. Do not treat those total returns as SIP XIRR.` |
+| `sample` | warning | `Demo prices` | `Sample or synthetic prices are for demos only — not live market SIP performance. Configure Upstox and sync for real history.` |
+| `upstox_only` | info | `Upstox only` | `Equity/ETF history for real runs comes only from Upstox-cached curated data. No yfinance, bhavcopy, or multi-vendor fill.` |
+
+**Accordion chrome**
+
+- Title: `How SIP Lab works`
+- Default: **expanded** on first visit or when `data_source=sample`; **collapsed** after first successful Upstox run (optional `localStorage` key `sf-sip-methodology-open`)
+- Place: config column bottom; compact sample warning strip also under KPIs when sample
 
 ---
 
-## 3. Strategy editor (`StrategyEditor`)
+## 2. Nav order & shell behavior
 
-**Purpose:** Define or load the basket the SIP deploys into.
+### 2.1 Left nav + mobile bottom nav (`AppShell` `NAV`)
 
-### 3.1 Modes (MVP)
+| Order | Label | Route | Icon (Lucide) |
+|------:|-------|-------|---------------|
+| 1 | Dashboard | `/` | `LayoutDashboard` |
+| 2 | Holdings | `/holdings` | `PieChart` |
+| 3 | Performance | `/performance` | `Activity` |
+| 4 | **SIP Lab** | `/sip-lab` | `FlaskConical` |
 
-| Mode | UX | Notes |
-|------|-----|-------|
-| **Load strategy** | Select from `GET /strategies` (or local sample list) | Preferred when API exists |
-| **Load from smallcase** | Map v0 smallcase → constituents + weights | Seed only; still a SIP strategy run |
-| **Inline edit** | Editable table of symbol + weight | Equity/ETF only |
+Active: existing `bg-[var(--accent-subtle)] text-[var(--accent)]`.  
+Mobile bottom nav: same four items (label may truncate to “SIP” if space tight — prefer full “SIP Lab”).
 
-Do **not** build a full portfolio-import wizard (Kite/Coin).
+### 2.2 Top bar on `/sip-lab`
 
-### 3.2 Anatomy
+| Control | Behavior |
+|---------|----------|
+| Brand | Unchanged; optional product rename later — keep current brand string |
+| SmallcaseSelect | **Optional seed only** for “load basket from smallcase”; primary strategy picker lives in page form |
+| RangeChips / CustomRange | **Hide** in left-nav range panel when `pathname` starts with `/sip-lab` (SIP uses form start/end) |
+| As-of badge | Keep if curated prices have as-of |
+| ThemeToggle | Unchanged |
+| DataSourceBanner | Always on (global) |
+
+### 2.3 Dashboard callout → SIP Lab
+
+Add a compact callout on **Dashboard** (`/`) so first-time visitors discover SIP Lab without hunting nav.
+
+**Placement:** Below context strip / above KPI row (or immediately under KPI row if fold is tight). Full width of main content.
+
+| Key | Copy |
+|-----|------|
+| `dash_callout.title` | `Try SIP Lab` |
+| `dash_callout.body` | `Dashboard shows weight-based NAV for this smallcase. SIP Lab answers a different question: monthly cash SIPs into a basket, with XIRR as the result.` |
+| `dash_callout.cta` | `Open SIP Lab` |
+| `dash_callout.href` | `/sip-lab` |
+
+**Visual**
 
 ```
-┌─ Strategy ─────────────────────────────────────────────┐
-│ Label: Strategy · [Select ▾]  or  “Untitled basket”    │
-│                                                        │
-│ Allocation mode: (•) Custom weights  ( ) Equal weight  │
-│                                                        │
-│ ┌ Constituents table ────────────────────────────────┐ │
-│ │ Symbol │ Name        │ Weight % │  [×]             │ │
-│ │ RELIANCE│ Reliance…  │  25.0    │                  │ │
-│ │ …       │            │          │                  │ │
-│ └────────────────────────────────────────────────────┘ │
-│ [+ Add symbol]   Weight sum: 100.0%  or warning chip   │
-│                                                        │
-│ Instrument map: N/M resolved · missing → warning list  │
-└────────────────────────────────────────────────────────┘
+rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]
+px-4 py-3 flex flex-wrap items-center justify-between gap-3
+title: text-sm font-medium
+body:  text-xs text-[var(--text-secondary)] max-w-xl
+cta:   secondary or primary small button / Link
 ```
 
-### 3.3 Constituent table columns
+Optional dismiss: `localStorage` `sf-sip-dash-callout-dismissed` — not required for MVP.
 
-| Field | Header | Align | Format | Notes |
-|-------|--------|-------|--------|-------|
-| `symbol` | Symbol | left | mono `text-sm tabular-nums` optional | Required |
-| `name` | Name | left | truncate | Optional |
-| `weight` | Weight | right | `25.0%` (1 dp) | Hide editable % in equal-weight mode (show computed) |
-| actions | — | center | remove icon button | ghost |
+**Do not** put SIP XIRR on Dashboard KPI row in this version (separate product surfaces).
 
-- Row height ~36–40px (design-system dense table).
-- Header: `bg-[var(--bg-muted)] text-[var(--text-secondary)] sticky` if list long.
-- Max visible rows ~8 with internal scroll `max-h-[280px] overflow-y-auto`.
+---
 
-### 3.4 Validation (inline, not blocking page)
+## 3. Configure column
 
-| Condition | Treatment |
-|-----------|-----------|
-| Weight sum ≠ 100% (±0.1%) in custom mode | `Badge warning`: “Weights sum to 98.2%” — disable Run |
-| Empty constituents | Disable Run; helper text |
-| Duplicate symbols | Highlight row; disable Run |
-| Unresolved `instrument_key` | Row-level warning icon + list under table; Run may still fire if API allows partial — prefer **block** until mapped or user confirms skip |
-| Non equity/ETF | Reject in UI with helper: “Equities & ETFs only this version” |
+### 3.1 Strategy editor (`StrategyEditor`) — new
 
-### 3.5 Component props (conceptual)
+| Mode | UX |
+|------|-----|
+| Load strategy | Select from `GET /strategies` or file-backed list when available |
+| Load from smallcase | Seed from `GET /smallcases` + holdings (weights as fractions) |
+| Inline edit | Symbol + weight table; equity/ETF only |
+
+**Card title copy:** `Basket`
+
+Constituent columns: Symbol · Name · Weight % · remove.  
+Equal-weight mode: show computed weights read-only.  
+Weight sum ≠ 100% (±0.1%): warning badge + disable Run.  
+Max ~8 rows visible, `max-h-[280px] overflow-y-auto`.
 
 ```
 StrategyEditor {
   strategyId?: string
   constituents: { symbol: string; name?: string; weight: number }[]
   allocationMode: 'custom_weights' | 'equal_weight'
-  instrumentStatus?: { symbol: string; resolved: boolean; instrument_key?: string }[]
+  instrumentStatus?: { symbol: string; resolved: boolean }[]
   onChange: (patch) => void
   loading?: boolean
-  readOnly?: boolean   // when replaying a frozen run result
+  readOnly?: boolean
 }
 ```
 
-Tailwind card:
+### 3.2 SIP parameters (`SipParamsForm`) — new
 
-```
-rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 flex flex-col gap-3
-```
+| Field | Control | Default | Validation |
+|-------|---------|---------|------------|
+| `amount` | Number + ₹ prefix | `10000` | > 0 |
+| `day_of_month` | 1–28 | `1` | 1–28 MVP |
+| `start_date` | Date | e.g. 3y ago | ≤ end |
+| `end_date` | Date or “to latest” | latest | ≥ start |
+| `allocation_mode` | Radio if not only on strategy | custom / equal | single source of truth |
 
----
+**CTA**
 
-## 4. SIP parameters (`SipParamsForm`)
+| State | Visual / copy |
+|-------|----------------|
+| Ready | Primary full-width: `Run backtest` |
+| Invalid | Disabled `opacity-50` |
+| Running | Spinner + `Running…`; `aria-busy` |
+| Export | Secondary; disabled until success; menu CSV/JSON |
 
-**Purpose:** Cash contribution schedule. Binding product rules from ADR 004.
-
-### 4.1 Fields
-
-| Field | Control | Default | Validation | Notes |
-|-------|---------|---------|------------|-------|
-| `amount` | Number input + ₹ prefix | `10000` | > 0 | Format display `en-IN`; store number |
-| `day_of_month` | Number 1–28 (or select) | `1` | 1–28 MVP | Label: “SIP day (calendar)” |
-| `start_date` | Date input | e.g. 3y ago or strategy default | ≤ end | `YYYY-MM-DD` |
-| `end_date` | Date input **or** toggle “To latest price” | latest | ≥ start | Toggle clears explicit end |
-| `allocation_mode` | Radio (if not only on strategy) | custom / equal | — | Single source of truth with StrategyEditor |
-
-### 4.2 Layout
-
-```
-┌─ SIP parameters ───────────────────────────────────────┐
-│ Monthly amount                                         │
-│ ┌ ₹ ───────────────────────────────────────────────┐   │
-│ │ 10,000                                           │   │
-│ └──────────────────────────────────────────────────┘   │
-│                                                        │
-│ SIP day of month          [ 1 ▾ ]  (1–28)              │
-│ helper: Non-trading days → next trading session        │
-│                                                        │
-│ Start date  [ 2021-01-01 ]                             │
-│ End date    [ 2024-12-31 ]  ☑ To latest available      │
-│                                                        │
-│ ┌────────────────────────────┐  ┌───────────────────┐  │
-│ │  Run backtest              │  │ Export ▾          │  │
-│ │  primary accent            │  │ secondary, off    │  │
-│ └────────────────────────────┘  └───────────────────┘  │
-└────────────────────────────────────────────────────────┘
-```
-
-### 4.3 Field chrome (forms)
-
-| Element | Spec |
-|---------|------|
-| Label | `text-xs font-medium text-[var(--text-secondary)]` |
-| Input height | 40px (`h-10`) |
-| Input | `rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 text-sm text-[var(--text-primary)] tabular-nums` |
-| Focus | `focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50` |
-| Prefix ₹ | Absolute left inside amount field; muted |
-| Helper | `text-[11px] text-[var(--text-muted)]` under day-of-month |
-
-### 4.4 Primary CTA — Run backtest
-
-| State | Visual |
-|-------|--------|
-| Ready | `primary` button full width of card: solid `bg-[var(--accent)] text-[var(--text-inverse)] h-10 font-medium` |
-| Invalid form | Disabled: `opacity-50 cursor-not-allowed` |
-| Running | Spinner + “Running…”; disable double-submit |
-| Success | Brief idle; results panel updates (no confetti) |
-
-Label: **“Run backtest”** — not “Invest” / “Trade”.
-
-### 4.5 Export control
-
-| Detail | Spec |
-|--------|------|
-| Placement | Adjacent to Run (secondary) or results header |
-| Formats | CSV cashflows · JSON summary (menu) |
-| Disabled | Until successful run |
-| Variant | `secondary` border button |
+Pre-run source line under CTA: `source.pre_run.*` from §1.4.
 
 ---
 
-## 5. Results panel — states
+## 4. Results panel — state machine
 
-### 5.1 Idle (no run yet)
+States: `idle` → `loading` → `success` | `error`. Dirty params after success → optional stale banner without clearing last result.
 
-Centered empty state inside right column surface:
+### 4.1 Idle / empty (no run yet)
 
-```
-EmptyState
-  title: “Run a SIP backtest”
-  body:  “Set basket, amount, and dates — results show XIRR, market value path, and cashflows.”
-  icon:  Flask / chart (muted)
-```
+Reuse `EmptyState`:
 
-Reuse `EmptyState` patterns from v0 feedback components.
+| Prop | Value |
+|------|-------|
+| `title` | `Run a SIP backtest` |
+| `description` | `Pick a basket, set monthly amount and dates, then run. You’ll get XIRR, portfolio value over time, and the cashflows behind the number.` |
+| `action` | Optional muted text: `Results appear here after you run.` |
 
-### 5.2 Loading
+Container: fill results column min-height ~360px so layout doesn’t collapse.
 
-- Skeleton KPI row (hero XIRR block + 4 small cards)
-- Chart skeleton `h-[360px] animate-pulse bg-[var(--bg-muted)] rounded-lg`
-- Table skeleton 5 rows
-- Config column remains interactive but Run stays in running state
+### 4.2 Loading
 
-### 5.3 Error
+| Element | Treatment |
+|---------|-----------|
+| KPI strip | Skeleton: 1 large XIRR block + 4 small `MetricCard` loading |
+| Chart | `h-[360px] animate-pulse rounded-lg bg-[var(--bg-muted)]` |
+| Tables | 5 skeleton rows |
+| How-to-read | Keep visible (static copy) |
+| Config | Interactive; Run stays `Running…` |
 
-Inline `ErrorBanner` at top of results column:
+### 4.3 Error
 
-| Kind | Copy pattern |
-|------|----------------|
-| 4xx config | “Invalid SIP config: {detail}” |
-| Missing prices | “Insufficient price history for {symbols}. Sync Upstox or shorten range.” |
-| Engine | “Backtest failed. Retry or check API logs.” |
-| Network | “API unreachable at {base}.” |
+Reuse `ErrorBanner` at top of results column (`role="alert"`).
 
-Retry button when safe. Preserve last good result below banner if any (optional).
+| Kind | `message` pattern |
+|------|-------------------|
+| 4xx config | `Invalid SIP config: {detail}` |
+| Missing prices | `Not enough price history for {symbols}. Sync Upstox or shorten the date range.` |
+| Engine | `Backtest failed. Retry or check API logs.` |
+| Network | `Can’t reach the API at {base}. Is the server running?` |
+| Timeout | `Backtest timed out. Try a shorter range or fewer symbols.` |
 
-### 5.4 Success
+`onRetry` → re-POST last valid body when safe.  
+Optional: keep last good success below banner.
 
-Full results stack (§6–§9). Persist last request params in URL query where practical for reload:
+### 4.4 Success
+
+1. Result-scoped `DataSourceChip` (§1.4)  
+2. KPI strip — XIRR hero first  
+3. Portfolio value chart (+ invested dashed)  
+4. Optional drawdown  
+5. Tabs: Cashflows · By holding · SIP schedule  
+6. How to read (§1.6)  
+7. Assumptions footer  
+
+URL query (no secrets):
 
 ```
 ?strategy=<id>&amount=10000&day=1&start=2021-01-01&end=2024-12-31
 ```
 
-Do not put secrets in URL.
-
 ---
 
-## 6. Data-source status (result-scoped)
+## 5. KPI strip — XIRR primary
 
-**In addition to** global `DataSourceBanner`.
-
-### 6.1 Chip / banner under results header
-
-| `data_source` (API) | Visual | Copy |
-|---------------------|--------|------|
-| `upstox` | `Badge info` accent subtle | “Prices: Upstox (cached curated)” |
-| `sample` | `Badge warning` risk.warning | “Demo / sample prices — not live market SIP performance” |
-| mixed / partial | `Badge warning` | “Partial Upstox coverage · N symbols sample or missing” |
-
-```
-flex flex-wrap items-center gap-2 mb-3
-```
-
-**Rules (ADR 005):**
-
-- Never imply sample = Upstox.
-- Never show tokens, keys, or secrets.
-- If sample: hero XIRR still shown but with warning stripe on KPI well optional:
-
-```
-border-l-2 border-[var(--risk-warning)]
-```
-
-### 6.2 Pre-run status (config column)
-
-Small line under Run button:
-
-- Configured: “Will use curated prices (Upstox sync path).”
-- Not configured: “No Upstox token — run will use sample/demo prices.”
-
-Link text to `docs/integrations/upstox.md` is optional in UI (tooltip ok).
-
----
-
-## 7. KPI strip — XIRR primary
-
-**Hierarchy:** XIRR is the hero; secondary metrics support path risk/size. Do **not** lead with v0 NAV index return as the story.
-
-### 7.1 Layout
-
-```
-┌ grid: 1 hero + secondary ─────────────────────────────────────────────┐
-│  ┌ XIRR hero (col larger) ─────┐  ┌ Total invested ┐ ┌ Final value ┐  │
-│  │ XIRR                        │  │ ₹12,00,000     │  │ ₹18,42,000  │  │
-│  │ +14.82%                     │  └────────────────┘  └─────────────┘  │
-│  │ n SIPs · date range         │  ┌ Max DD ────────┐ ┌ Contribs ───┐  │
-│  └─────────────────────────────┘  │ −18.40%        │  │ 36 months   │  │
-│                                   └────────────────┘  └─────────────┘  │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-Tailwind sketch:
+**Hierarchy:** XIRR is largest / first-read. Never lead with v0 NAV total return.
 
 ```
 grid grid-cols-2 lg:grid-cols-6 gap-4
-  XIRR card:   col-span-2 lg:col-span-2  (or min-h larger value text-3xl)
-  others:      col-span-1 each
+  XIRR: col-span-2  value text-3xl font-semibold tabular-nums
+  others: col-span-1 each  MetricCard size default|compact
 ```
 
-### 7.2 Cards
+| # | Label (copy key) | Source | Sentiment | Format |
+|---|------------------|--------|-----------|--------|
+| 1 | `XIRR` | `result.xirr` | pos/neg/flat | `+14.82%` (2 dp) |
+| 2 | `Total invested` | `total_invested` | none | `₹12,00,000` en-IN |
+| 3 | `Final value` | `final_value` | none | `₹18,42,310.25` |
+| 4 | `Absolute gain` | final − invested | pos/neg | `+₹6,42,310` + optional `%` delta |
+| 5 | `Max drawdown` | MV path | neg when set | `−18.40%` |
+| 6 | Contributions | `n_contributions` | none | `36 SIPs` |
 
-| # | Label | Field (conceptual) | Sentiment | Format |
-|---|-------|--------------------|-----------|--------|
-| 1 | **XIRR** | `xirr` | pos / neg / flat | `+14.82%` (2 dp); **text-3xl font-semibold** |
-| 2 | Total invested | `total_invested` | none | `₹12,00,000` en-IN |
-| 3 | Final value | `final_value` | none (or pos/neg vs invested as delta) | `₹18,42,310.25` |
-| 4 | Absolute gain | `final_value - total_invested` | pos/neg | `+₹6,42,310` + optional `+53.5%` delta line |
-| 5 | Max drawdown | `max_drawdown` on MV path | always neg when set | `−18.40%` |
-| 6 | # contributions | `n_contributions` | none | `36 SIPs` |
+XIRR card: label + tooltip `xirr.tooltip`; sublabel from template; null → `—` + `xirr.null`.  
+Sample source: warning left border on hero card.
 
-Optional stretch metrics (if API returns): CAGR-like path metric, volatility — **never replace XIRR**.
-
-### 7.3 XIRR card special treatment
-
-```
-rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-4
-  optional: ring-1 ring-[var(--accent)]/20 when source=upstox
-label: "XIRR" + hint tooltip
-  “Annualized return on SIP cashflows (contributions + terminal value). Fixture tol ≤ 1e-4.”
-value: text-3xl font-semibold tabular-nums + sentiment color
-sublabel: "Jan 2021 → Dec 2024 · day 1 → next session"
-```
-
-Null XIRR: `—` + “Need ≥ 2 cashflows”.
-
-### 7.4 Reuse
-
-- `MetricCard` for secondary KPIs (`size="default"`).
-- Hero may be a `MetricCard` with larger value class or thin wrapper `XirrHeroCard`.
+**Reuse:** secondary cards = `MetricCard`. Hero = `MetricCard` with larger value class **or** thin `XirrHeroCard` wrapper.
 
 ---
 
-## 8. Equity / market-value curve
+## 6. Charts & tables
 
-**Not** the same as v0 base-100 NAV story — this is **portfolio market value** (and optionally invested capital) over time.
-
-### 8.1 Panel
+### 6.1 Portfolio value curve
 
 | Detail | Spec |
 |--------|------|
-| Component | Reuse `PerformanceChart` `variant="equity"` **or** `SipEquityChart` if dual series needs different Y labels |
-| Title | “Portfolio value” |
-| Subtitle | “Market value of SIP units · zero costs” |
-| Height | 360px desktop |
-| Series A | Portfolio MV — `chart.portfolio` `#60A5FA` line |
-| Series B (recommended) | Cumulative invested — `chart.benchmark` / secondary `#A78BFA` **dashed** |
-| Series C (optional P3) | Benchmark index SIP — later |
-| X | date |
-| Y | INR (`₹` ticks compact: `₹2.5L`) |
-| Tooltip | Date · MV · Cum invested · optional units total |
-| Legend | Portfolio value · Invested |
-| Empty | “No series — run a backtest” |
+| Reuse | `PerformanceChart` `variant="equity"` **or** `SipEquityChart` if dual Y labels need it |
+| Title | `Portfolio value` |
+| Subtitle | `Market value of SIP units · zero costs` |
+| Height | 360px |
+| Series A | Portfolio MV — `var(--chart-portfolio)` solid |
+| Series B | Cumulative invested — `var(--chart-benchmark)` **dashed** |
+| Y | INR compact ticks (`₹2.5L`) |
+| Tooltip | Date · MV · Cum invested |
+| Empty | `No series — run a backtest` |
 
-**Do not** color the MV line green/red from XIRR. Structural series colors only; P&L stays on KPIs/tables.
+Do **not** color MV line green/red from XIRR. P&L stays on KPIs/tables.
 
-Panel chrome:
+### 6.2 Drawdown (optional)
+
+Title: `Drawdown (market value)`. Height 220–260px. `variant="drawdown"` / `pnl.negative` area. `syncId` with equity chart.
+
+### 6.3 Tabs
 
 ```
-rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-4
-header: flex justify-between items-center mb-3
+[ Cashflows ] [ By holding ] [ SIP schedule ]
 ```
 
-### 8.2 Optional drawdown under curve
+| Tab | Columns (summary) |
+|-----|-------------------|
+| Cashflows | Date · Type (Contribution / Terminal) · Amount (engine sign) · Note (e.g. day adjusted) |
+| By holding | Symbol · Name · Weight · Units end · MV end · Contrib to gain |
+| SIP schedule | Calendar day · Actual session · Amount · Adjusted? chip |
 
-| Detail | Spec |
-|--------|------|
-| Show when | API or client can compute peak-to-trough on MV |
-| Height | 220–260px |
-| Styling | Same as Performance page: `pnl.negative` area |
-| Title | “Drawdown (market value)” |
-| syncId | Share with equity chart when both present |
+Dense table tokens from design system; sticky header; `max-h-[360px] overflow-auto`.  
+Cashflow helper under table if signs are XIRR-style: `Outflows negative · terminal positive` (only if engine uses that convention).
 
 ---
 
-## 9. Contribution & cashflows
+## 7. Component inventory (map to existing)
 
-Two complementary tables; default **tabs** to save vertical space:
+### 7.1 Reuse as-is
 
-```
-Tabs: [ Cashflows ] [ By holding ] [ SIP schedule ]
-```
+| Component | Path | SIP Lab use |
+|-----------|------|-------------|
+| `AppShell` | `components/shell/AppShell.tsx` | Extend `NAV` (+ hide range panel on `/sip-lab`) |
+| `DataSourceBanner` | `components/shell/DataSourceBanner.tsx` | Global demo/config banner |
+| `ThemeToggle` | `components/shell/ThemeToggle.tsx` | Unchanged |
+| `MetricCard` | `components/kpis/MetricCard.tsx` | Total invested, final value, gain, max DD, # SIPs; optional XIRR if sized up |
+| `PerformanceChart` | `components/charts/PerformanceChart.tsx` | MV equity + optional drawdown |
+| `EmptyState` | `components/feedback/EmptyState.tsx` | Idle results |
+| `ErrorBanner` | `components/feedback/ErrorBanner.tsx` | Run failures |
+| `SmallcaseSelect` | `components/smallcase/SmallcaseSelect.tsx` | Optional basket seed only |
+| Format helpers | `lib/format.ts` | INR, %, dates |
+| Sentiment helpers | `lib/sentiment.ts` | XIRR / gain / DD colors |
 
-Tab chrome: underline or chip group; active = accent text + bottom border.
+### 7.2 New (SIP-specific)
 
-### 9.1 Cashflows (primary for XIRR trust)
+| Component | Responsibility |
+|-----------|----------------|
+| `StrategyEditor` | Basket load/edit, weights, validation |
+| `SipParamsForm` | Amount, day, dates, Run/Export, pre-run source line |
+| `XirrHeroCard` | Emphasized XIRR (or MetricCard + `className`) |
+| `SipResultsPanel` | idle/loading/error/success state machine |
+| `DataSourceChip` | Result-scoped sample/Upstox chip |
+| `MethodologyPanel` | Accordion §1.7 |
+| `HowToReadPanel` | Static §1.6 under results |
+| `SipCashflowTable` | Cashflows tab |
+| `SipHoldingTable` | By-holding tab (omit tab if API empty) |
+| `SipScheduleTable` | Schedule audit tab |
+| `SipDashCallout` | Dashboard → SIP Lab strip (§2.3) |
+| `SipEquityChart` | Only if `PerformanceChart` cannot dual-series MV + invested cleanly |
 
-| Column | Align | Format |
-|--------|-------|--------|
-| Date | left | `YYYY-MM-DD` |
-| Type | left | Badge: `Contribution` / `Terminal` / `Residual` |
-| Amount | right | Signed INR; contributions negative or shown as outflow with convention matching engine export |
-| Note | left | e.g. “SIP day adjusted +1 session” |
+### 7.3 Do not reuse for wrong semantics
 
-- Sort: date ascending.
-- Terminal row emphasize with slightly stronger text weight.
-- Footer: sum of contributions, terminal value.
+| Avoid | Why |
+|-------|-----|
+| `POST /backtest` client helper | v0 rebalance NAV — wrong engine |
+| Dashboard KPI set as SIP story | NAV/CAGR ≠ SIP XIRR |
+| Global RangeChips driving SIP window | Form owns start/end |
+| Coin / Kite import UI | Out of scope this version |
 
-**Sign convention (display):** Prefer engine’s export convention; document in assumptions. UI must match API (e.g. contributions as negative cashflows for XIRR). Show helper: “Outflows negative · terminal positive” if that is the model.
-
-### 9.2 By holding (contribution / allocation result)
-
-| Column | Align | Format | Sentiment |
-|--------|-------|--------|-----------|
-| Symbol | left | mono | — |
-| Name | left | truncate | — |
-| Weight (target) | right | `12.5%` | none |
-| Units (end) | right | 4 dp or integer policy | none |
-| MV (end) | right | INR | none |
-| Contrib to gain | right | INR or % of total gain | pos/neg |
-
-- Default sort: contrib desc.
-- Micro bar optional (accent fill, not P&L green for weight).
-- Empty: hide tab if API omits holding attribution in MVP.
-
-### 9.3 SIP schedule (audit)
-
-| Column | Align | Notes |
-|--------|-------|-------|
-| Calendar day | left | Requested DOM |
-| Actual session | left | After next-trading-day rule |
-| Amount deployed | right | INR |
-| Adjusted? | center | Chip `Yes` warning muted if shifted |
-
-Builds trust in ADR 004 day rule.
-
-### 9.4 Table styling
-
-Reuse holdings/performance dense table tokens:
-
-- Sticky header `bg-[var(--bg-muted)]`
-- `tabular-nums` on all money/%
-- Hover `bg-[var(--bg-hover)]`
-- Max height `max-h-[360px] overflow-auto` for long SIP histories
-
----
-
-## 10. Methodology warnings (`#methodology`)
-
-Collapsible panel — default **collapsed** after first successful run; **expanded** on first visit or when `data_source=sample`.
-
-### 10.1 Content (fixed MVP copy blocks)
-
-| Warning | Severity | Body |
-|---------|----------|------|
-| Zero costs | info | “MVP assumes zero brokerage, STT, stamp, slippage, and expense drag. Buys at documented session price for full SIP amount.” |
-| SIP day rule | info | “Contributions use a fixed calendar day of month. If that day is not a trading session, invest on the next session with available prices.” |
-| XIRR primary | info | “Headline performance is XIRR on cashflows (contributions + terminal). Path CAGR/NAV-style metrics are secondary and are not the SIP success criterion.” |
-| Not v0 rebalance NAV | warning | “This is not the Dashboard/Performance weight-NAV rebalance backtest. Do not compare XIRR directly to index-style total return without care.” |
-| Sample prices | warning | “Sample/synthetic prices are for demos only. Not live market SIP performance. Configure Upstox env + sync for real history.” |
-| Upstox sole source | info | “Equity/ETF history for real runs comes only from Upstox-cached curated data. No yfinance / bhavcopy / multi-vendor fill.” |
-
-### 10.2 Visual
+### 7.4 File map suggestion
 
 ```
-┌─ Methodology & assumptions  [▾] ───────────────────────┐
-│ ⚠ Sample prices — demo only                            │  ← only if sample
-│ · Zero transaction costs (MVP)                         │
-│ · SIP day → next trading day                           │
-│ · XIRR primary (fixture tol 1e-4 engine-side)          │
-│ · Not v0 NAV rebalance                                 │
-└────────────────────────────────────────────────────────┘
-```
-
-- Container: `rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)]`
-- Warning rows: left border `border-l-2 border-[var(--risk-warning)]` when severity warning
-- Info rows: muted bullet list `text-xs text-[var(--text-secondary)]`
-- Place: **config column bottom** always; **repeat compact strip** under KPIs when sample
-
----
-
-## 11. Assumptions footer (results)
-
-Micro text under tables:
-
-```
-text-[11px] text-[var(--text-muted)]
-
-SIP day: calendar D → next session · Costs: 0 · Currency: INR
-Price field: close (or API-documented) · Source: upstox|sample
-Range: 2021-01-01 → 2024-12-31 · Generated: local run (no curated write)
-```
-
-Align with API `notes` / `assumptions` when present.
-
----
-
-## 12. Data contract (map to API — conceptual P2)
-
-Frontend formats; API returns fractions for rates (`0.1482` → `+14.82%`).
-
-| UI | API / concept | Notes |
-|----|---------------|-------|
-| Strategy list | `GET /strategies` or file-backed list | Optional if only POST body |
-| Load smallcase seed | `GET /smallcases`, `GET /smallcases/{id}/holdings` | Weights as fractions |
-| Run | `POST /sip/backtest` (name TBD backend) | Body: strategy or inline constituents, amount, day, start, end |
-| XIRR + KPIs | `result.xirr`, `total_invested`, `final_value`, `max_drawdown`, `n_contributions` | |
-| MV series | `result.market_value_series[]` `{date, value}` | |
-| Invested series | `result.invested_series[]` optional | |
-| Cashflows | `result.cashflows[]` | |
-| Holding contrib | `result.holdings[]` optional MVP | |
-| Schedule audit | `result.sip_dates[]` optional | |
-| Source | `result.data_source`: `upstox` \| `sample` | **Required for banner** |
-| Warnings | `result.warnings[]` | Surface in methodology / banner |
-| Export | Client serialize response **or** `GET` export URL | CSV/JSON |
-
-**Do not** call `POST /backtest` (v0 rebalance) for SIP Lab results.
-
-### Upstox status
-
-| UI | API |
-|----|-----|
-| Global banner | Existing `GET` upstox status (configured flag, years) |
-| Result chip | `data_source` on SIP response |
-
----
-
-## 13. Interactions
-
-1. **Edit strategy / SIP params** → dirty state; results show stale overlay optional: “Params changed — re-run to update” (muted banner).
-2. **Run backtest** → POST; loading; replace results; scroll results into view on mobile.
-3. **Export** → download cashflows CSV / summary JSON from last response.
-4. **Equal weight toggle** → recompute displayed weights; mark dirty.
-5. **Add/remove symbol** → validate sum; instrument resolve async if API supports.
-6. **Methodology expand** → localStorage `sf-sip-methodology-open` optional.
-7. **Theme toggle** → charts re-read CSS variables (same as v0).
-
-No live order placement. No broker OAuth UI in this version (token is env/CLI).
-
----
-
-## 14. Component inventory (new vs reuse)
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| `AppShell` nav item | extend | Add SIP Lab link |
-| `DataSourceBanner` | reuse | Global |
-| `MetricCard` | reuse | Secondary KPIs |
-| `PerformanceChart` | reuse / extend | MV + invested series |
-| `EmptyState` / `ErrorBanner` | reuse | |
-| `StrategyEditor` | **new** | Form + table |
-| `SipParamsForm` | **new** | Amount, DOM, dates, CTA |
-| `XirrHeroCard` | **new** or MetricCard variant | Emphasized XIRR |
-| `SipResultsPanel` | **new** | State machine wrapper |
-| `SipCashflowTable` | **new** | |
-| `SipContributionTable` | **new** | Optional MVP |
-| `MethodologyPanel` | **new** | Collapsible warnings |
-| `DataSourceChip` | **new** (tiny) | Result-scoped source |
-
----
-
-## 15. Tailwind structure sketch
-
-```tsx
-// structural only — not full implementation
-<main className="mx-auto max-w-[1440px] px-6 py-6 flex flex-col gap-6">
-  <header className="flex flex-col gap-1">
-    <h1 className="text-xl font-semibold">SIP Lab</h1>
-    <p className="text-sm text-[var(--text-secondary)]">
-      Monthly SIP into a custom equity/ETF basket · XIRR primary · Upstox history
-    </p>
-  </header>
-
-  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-    {/* Config */}
-    <aside className="lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-20 lg:self-start">
-      {/* StrategyEditor */}
-      {/* SipParamsForm + Run + Export */}
-      {/* MethodologyPanel */}
-    </aside>
-
-    {/* Results */}
-    <section className="lg:col-span-8 flex flex-col gap-6 min-w-0">
-      {/* DataSourceChip */}
-      {/* KPI strip: XIRR hero + secondaries */}
-      {/* PerformanceChart MV (+ invested) */}
-      {/* optional drawdown */}
-      {/* tabs: cashflows / holdings / schedule */}
-      {/* assumptions footer */}
-    </section>
-  </div>
-</main>
+app/sip-lab/page.tsx
+components/sip/
+  StrategyEditor.tsx
+  SipParamsForm.tsx
+  XirrHeroCard.tsx
+  SipResultsPanel.tsx
+  DataSourceChip.tsx
+  MethodologyPanel.tsx
+  HowToReadPanel.tsx
+  SipCashflowTable.tsx
+  SipHoldingTable.tsx
+  SipScheduleTable.tsx
+  SipDashCallout.tsx   // also import on app/page.tsx
+lib/api.ts             // postSipBacktest → POST /sip/backtest
 ```
 
 ---
 
-## 16. Color & type quick reference (finance dark)
+## 8. Data contract (UI ↔ API)
 
-| Use | Token / class |
-|-----|----------------|
-| App / cards | `--bg-app` / `--bg-surface` / `--border-default` |
-| XIRR / gains | `--pnl-pos` with explicit `+` |
-| Losses / DD | `--pnl-neg` |
-| Sample warning | `--risk-warning` |
-| Run CTA / nav active | `--accent` (structure, not P&L) |
-| Chart MV | `--chart-portfolio` |
-| Chart invested | `--chart-benchmark` dashed |
-| Labels | `text-[var(--text-secondary)]` |
-| Values | `tabular-nums` + consistent decimals |
+| UI | API concept |
+|----|-------------|
+| Run | **`POST /sip/backtest`** only |
+| XIRR + KPIs | `xirr`, `total_invested`, `final_value`, `max_drawdown`, `n_contributions` |
+| Series | `market_value_series[]`, optional `invested_series[]` |
+| Tables | `cashflows[]`, optional `holdings[]`, optional `sip_dates[]` |
+| Source | **`data_source`: `upstox` \| `sample`** required |
+| Warnings | `warnings[]` → methodology / banners |
+| Rates | API fractions (`0.1482`) → UI `+14.82%` |
 
-Typography: Inter (or system stack already in app); KPI hero 30–32px; body 14px; micro 11–12px.
+Rates/XIRR: presenters format; never dump raw API into KPI value.
 
 ---
 
-## 17. Accessibility
+## 9. Accessibility
 
-- Form labels associated with inputs; errors announced (`aria-invalid`, `aria-describedby`).
-- Run button `aria-busy` while loading.
-- XIRR and P&L never color-only — signs required.
-- Tables: `<th scope="col">`; sort buttons keyboard accessible.
-- Focus rings on all controls (`ring-[var(--accent)]/50`).
-- Sticky config must not trap focus; mobile order = form then results.
-
----
-
-## 18. Acceptance (SIP Lab UI)
-
-- [ ] Nav includes **SIP Lab** → `/sip-lab`
-- [ ] Strategy editor: load/edit constituents + weights/equal mode with validation
-- [ ] SIP params: amount, day-of-month (1–28), start/end or “to latest”
-- [ ] Helper text documents **calendar day → next trading day**
-- [ ] **Run backtest** posts SIP endpoint (not v0 `/backtest` rebalance)
-- [ ] **XIRR** is the largest, first-read KPI; secondary size/risk metrics present
-- [ ] Equity chart shows portfolio **market value** (+ cumulative invested if available)
-- [ ] Cashflow table matches engine export convention; export CSV/JSON works
-- [ ] Contribution-by-holding section when API provides data; else omitted cleanly
-- [ ] Methodology panel covers zero costs, day rule, XIRR primary, not-v0-NAV
-- [ ] **Upstox vs sample** visible globally and on result (`data_source`)
-- [ ] Sample runs never look like live market claims (warning badge + methodology)
-- [ ] No Coin / Kite / portfolio-import screens this version
-- [ ] Dark default tokens; light mode still readable
-- [ ] Loading / empty / error states implemented without layout collapse
+- Labels on all inputs; errors via `aria-invalid` / `aria-describedby`
+- Run: `aria-busy` while loading
+- XIRR / P&L: sign + color (never color alone)
+- Tables: `<th scope="col">`
+- Focus rings: `ring-[var(--accent)]/50`
+- Mobile order: hero → configure → results (no focus trap in sticky aside)
 
 ---
 
-## 19. Out of scope (this version)
+## 10. Acceptance checklist (UI)
+
+- [ ] Nav order: Dashboard · Holdings · Performance · **SIP Lab** (`/sip-lab`)
+- [ ] Dashboard shows **Try SIP Lab** callout with locked copy → `/sip-lab`
+- [ ] Hero uses locked title/subtitle/metric_line/scope_line
+- [ ] XIRR definition one-liner + tooltip present on hero KPI
+- [ ] Invested vs final labels/hints match §1.3
+- [ ] Demo vs Upstox chip + sample banner match §1.4
+- [ ] Configure: basket, amount, day 1–28, start/end, day helper copy
+- [ ] **Run backtest** → `POST /sip/backtest` only (never v0 `/backtest`)
+- [ ] XIRR is largest first KPI; secondary size/risk cards present
+- [ ] MV chart (+ invested if available); cashflow table; export when success
+- [ ] Methodology accordion covers zero costs, day rule, XIRR, not-v0, sample, Upstox
+- [ ] How-to-read section uses §1.6 strings
+- [ ] Empty / loading / error states without layout collapse
+- [ ] Global range chips hidden on SIP Lab route
+- [ ] No Coin / Kite / live order UI
+- [ ] Dark default; light still readable
+
+---
+
+## 11. Out of scope (this version)
 
 | Item | When |
 |------|------|
-| Coin / MF import UI | Later (after equity path) |
-| Kite holdings import / live-vs-SIP compare | Phase 4 |
-| Cost model toggles (brokerage, STT) | P3 optional |
+| Coin / MF | Later |
+| Kite holdings import / live-vs-SIP | Phase 4 |
+| Cost model toggles | P3 |
 | Benchmark index SIP overlay | P3 |
-| Multi-strategy compare grid | P3 |
-| Live trading / order tickets | Never (product non-goal) |
-| OAuth UI for Upstox inside web app | Optional later; MVP is env + CLI |
+| Multi-strategy compare | P3 |
+| Live trading | Never |
 | Treating Dashboard NAV as SIP performance | Forbidden |
 
 ---
 
-## 20. References
+## 12. References
 
+- Glossary / external copy: [sip-lab-external.md](../copy/sip-lab-external.md)
 - Design system: [design-system.md](../design-system.md)
-- Shared components: [components.md](../components.md)
-- v0 pages (patterns only): [dashboard.md](./dashboard.md) · [performance.md](./performance.md) · [holdings.md](./holdings.md)
+- Components: [components.md](../components.md)
+- v0 patterns: [dashboard.md](./dashboard.md) · [performance.md](./performance.md)
 - PRD / ADRs: [prd-sip-lab.md](../../product/prd-sip-lab.md) · [004](../../decisions/004-sip-lab-prd-decisions.md) · [005](../../decisions/005-upstox-sole-market-data.md)
-- Upstox: [upstox.md](../../integrations/upstox.md)
-- Backlog item: **P2-04** in [backlog-phase-0-2.md](../../product/backlog-phase-0-2.md)
+- Backlog: **P2-04+** in [backlog-phase-0-2.md](../../product/backlog-phase-0-2.md)
