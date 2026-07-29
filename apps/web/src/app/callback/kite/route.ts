@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 
 /**
- * Kite Connect redirect target (Phase 4 placeholder).
+ * Kite Connect OAuth redirect — exchange request_token for access_token.
  *
- * Register: https://<project>.vercel.app/callback/kite
- * Token exchange is not implemented in this product version.
+ * Register: https://smallcase-sip-lab.vercel.app/callback/kite
+ * Env on Vercel: KITE_API_KEY, KITE_API_SECRET
+ *
+ * Official flow: https://kite.trade/docs/connect/v3/user/
+ * Never log api_secret / request_token / access_token.
  */
 
 export const runtime = "nodejs";
@@ -20,9 +24,12 @@ function htmlPage(title: string, body: string, status = 200): NextResponse {
   <style>
     body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto;
            padding: 0 1rem; line-height: 1.5; color: #0f172a; }
-    code, pre { background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 4px; }
-    .ok { color: #047857; }
+    code, pre { background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 4px;
+                word-break: break-all; }
+    pre { padding: 0.75rem; overflow-x: auto; }
     .warn { color: #b45309; }
+    .ok { color: #047857; }
+    .err { color: #b91c1c; }
   </style>
 </head>
 <body>
@@ -45,29 +52,120 @@ function escapeHtml(s: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const requestToken = req.nextUrl.searchParams.get("request_token");
-  const status = req.nextUrl.searchParams.get("status");
+  const sp = req.nextUrl.searchParams;
+  const status = sp.get("status");
+  const requestToken = sp.get("request_token");
 
-  if (!requestToken) {
+  if (status === "error") {
     return htmlPage(
-      "Kite callback",
-      `<p>No <code>request_token</code>. This path is reserved for Phase 4 equity
-       holdings import. See <code>docs/integrations/kite-connect.md</code>.</p>
-       <p>Register this URL on the Kite developer console so app creation succeeds.</p>`,
+      "Kite login failed",
+      `<p class="err">Login was cancelled or failed (status=error).</p>`,
       400,
     );
   }
 
+  if (!requestToken) {
+    return htmlPage(
+      "Kite callback",
+      `<p>No <code>request_token</code>. Start login with
+       <code>make kite-login</code> or
+       <code>https://kite.zerodha.com/connect/login?v=3&amp;api_key=YOUR_KEY</code>.</p>
+       <p>Kite does <strong>not</strong> issue access tokens on the developer console —
+       only via this login flow.</p>`,
+      400,
+    );
+  }
+
+  const apiKey = process.env.KITE_API_KEY?.trim() ?? "";
+  const apiSecret = process.env.KITE_API_SECRET?.trim() ?? "";
+  const apiBase = (
+    process.env.KITE_API_BASE?.trim() || "https://api.kite.trade"
+  ).replace(/\/$/, "");
+
+  if (!apiKey || !apiSecret) {
+    return htmlPage(
+      "Missing server env",
+      `<p class="err">Set <code>KITE_API_KEY</code> and <code>KITE_API_SECRET</code>
+       on Vercel Environment (or run exchange locally with
+       <code>make kite-exchange REQUEST_TOKEN=…</code>).</p>`,
+      500,
+    );
+  }
+
+  const checksum = createHash("sha256")
+    .update(`${apiKey}${requestToken}${apiSecret}`)
+    .digest("hex");
+
+  const body = new URLSearchParams({
+    api_key: apiKey,
+    request_token: requestToken,
+    checksum,
+  });
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${apiBase}/session/token`, {
+      method: "POST",
+      headers: {
+        "X-Kite-Version": "3",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+      cache: "no-store",
+    });
+  } catch {
+    return htmlPage(
+      "Kite token exchange failed",
+      `<p class="err">Network error talking to Kite.</p>`,
+      502,
+    );
+  }
+
+  if (!resp.ok) {
+    const snippet = (await resp.text()).slice(0, 200);
+    return htmlPage(
+      "Kite token exchange failed",
+      `<p class="err">HTTP ${resp.status}</p><pre>${escapeHtml(snippet)}</pre>`,
+      502,
+    );
+  }
+
+  const payload = (await resp.json()) as {
+    status?: string;
+    message?: string;
+    data?: { access_token?: string; user_name?: string; user_id?: string };
+  };
+
+  if (payload.status === "error") {
+    return htmlPage(
+      "Kite token exchange failed",
+      `<p class="err">${escapeHtml(payload.message || "rejected")}</p>`,
+      502,
+    );
+  }
+
+  const accessToken = payload.data?.access_token;
+  if (typeof accessToken !== "string" || !accessToken) {
+    return htmlPage(
+      "Kite token exchange failed",
+      `<p class="err">Response missing access_token.</p>`,
+      502,
+    );
+  }
+
+  const who = escapeHtml(
+    payload.data?.user_name || payload.data?.user_id || "ok",
+  );
+
   return htmlPage(
-    "Kite request_token received",
+    "Kite access token ready",
     `
-<p class="ok">Login redirect reached this app (status=
-<code>${escapeHtml(status || "n/a")}</code>).</p>
-<p>Token exchange is <strong>not implemented</strong> in this product version.
-Copy <code>request_token</code> from the browser address bar only if testing Kite
-manually; product wiring is Phase 4 only.</p>
-<p class="warn">request_token length: ${requestToken.length} (value not shown).</p>
-<p><a href="/">Back to app</a></p>
+<p class="ok">Login successful (${who}).</p>
+<p class="warn"><strong>Copy into local <code>.env</code></strong> as
+<code>KITE_ACCESS_TOKEN</code>. Never commit. Expires ~6:00&nbsp;AM IST next day.</p>
+<pre>${escapeHtml(accessToken)}</pre>
+<p>Then run <code>make kite-holdings</code> locally.</p>
+<p><a href="/">Home</a></p>
 `,
   );
 }

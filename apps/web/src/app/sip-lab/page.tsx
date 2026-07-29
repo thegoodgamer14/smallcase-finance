@@ -20,6 +20,7 @@ import { SipHoldingTable } from "@/components/sip/SipHoldingTable";
 import {
   ApiError,
   apiBase,
+  getPriceUniverse,
   getStrategy,
   getUpstoxStatus,
   listStrategies,
@@ -48,10 +49,25 @@ import type {
 
 type RunState = "idle" | "loading" | "success" | "error";
 type ResultsTab = "cashflows" | "holdings";
+type BasketMode = "pick" | "create";
 
 interface BasketPeekRow {
   symbol: string;
   weight?: number | null;
+}
+
+interface CreateRow {
+  symbol: string;
+  weight: string;
+}
+
+function slugifyName(name: string): string {
+  const s = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+  return s || "custom-basket";
 }
 
 function defaultStartDate(): string {
@@ -143,7 +159,18 @@ export default function SipLabPage() {
   const [strategiesLoading, setStrategiesLoading] = useState(true);
   const [strategiesError, setStrategiesError] = useState<string | null>(null);
 
+  const [basketMode, setBasketMode] = useState<BasketMode>("pick");
   const [strategyId, setStrategyId] = useState("");
+  const [createName, setCreateName] = useState("My custom basket");
+  const [createEqual, setCreateEqual] = useState(true);
+  const [createRows, setCreateRows] = useState<CreateRow[]>([
+    { symbol: "TCS", weight: "0.25" },
+    { symbol: "INFY", weight: "0.25" },
+    { symbol: "RELIANCE", weight: "0.25" },
+    { symbol: "HDFCBANK", weight: "0.25" },
+  ]);
+  const [priceUniverse, setPriceUniverse] = useState<string[]>([]);
+
   const [amount, setAmount] = useState(10000);
   const [dayOfMonth, setDayOfMonth] = useState(1);
   const [start, setStart] = useState(defaultStartDate);
@@ -213,6 +240,24 @@ export default function SipLabPage() {
         if (!cancelled) setUpstoxConfigured(null);
       });
 
+    getPriceUniverse()
+      .then((u) => {
+        if (!cancelled && u.symbols?.length) {
+          setPriceUniverse(u.symbols);
+          // Prefer universe defaults when creating
+          const prefer = ["TCS", "INFY", "RELIANCE", "HDFCBANK"].filter((s) =>
+            u.symbols.includes(s),
+          );
+          if (prefer.length >= 2) {
+            const w = (1 / prefer.length).toFixed(4);
+            setCreateRows(prefer.map((symbol) => ({ symbol, weight: w })));
+          }
+        }
+      })
+      .catch(() => {
+        /* keep fallback rows */
+      });
+
     return () => {
       cancelled = true;
     };
@@ -246,7 +291,18 @@ export default function SipLabPage() {
   useEffect(() => {
     if (runState === "success" && result) setStale(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [strategyId, amount, dayOfMonth, start, end, endLatest]);
+  }, [
+    basketMode,
+    strategyId,
+    createName,
+    createEqual,
+    createRows,
+    amount,
+    dayOfMonth,
+    start,
+    end,
+    endLatest,
+  ]);
 
   // Close export menu on outside click
   useEffect(() => {
@@ -275,11 +331,35 @@ export default function SipLabPage() {
 
   const amountInvalid = !(amount > 0);
   const dayInvalid = dayOfMonth < 1 || dayOfMonth > 28;
-  const strategyInvalid = !strategyId;
+  const strategyInvalid = basketMode === "pick" && !strategyId;
   const endInvalid = !endLatest && (!end || end < start);
+
+  const createSymbols = useMemo(
+    () =>
+      createRows
+        .map((r) => r.symbol.trim().toUpperCase())
+        .filter(Boolean),
+    [createRows],
+  );
+
+  const createWeightSum = useMemo(() => {
+    if (createEqual) return 1;
+    return createRows.reduce((acc, r) => {
+      const w = parseFloat(r.weight);
+      return acc + (Number.isFinite(w) ? w : 0);
+    }, 0);
+  }, [createEqual, createRows]);
+
+  const createInvalid =
+    basketMode === "create" &&
+    (createSymbols.length < 1 ||
+      new Set(createSymbols).size !== createSymbols.length ||
+      (!createEqual && Math.abs(createWeightSum - 1) > 0.02) ||
+      !createName.trim());
 
   const formValid =
     !strategyInvalid &&
+    !createInvalid &&
     !amountInvalid &&
     !dayInvalid &&
     Boolean(start) &&
@@ -287,14 +367,64 @@ export default function SipLabPage() {
 
   const buildBody = useCallback((): SipBacktestRequest => {
     const body: SipBacktestRequest = {
-      strategy_id: strategyId,
       amount,
       day_of_month: dayOfMonth,
       start,
     };
     if (!endLatest && end) body.end = end;
+
+    if (basketMode === "create") {
+      const n = createSymbols.length || 1;
+      const constituents = createRows
+        .filter((r) => r.symbol.trim())
+        .map((r) => {
+          const symbol = r.symbol.trim().toUpperCase();
+          const w = createEqual
+            ? 1 / n
+            : parseFloat(r.weight) || 0;
+          return { symbol, target_weight: w };
+        });
+      body.strategy = {
+        strategy_id: slugifyName(createName),
+        name: createName.trim() || "Custom basket",
+        currency: "INR",
+        version: "1",
+        allocation_mode: createEqual ? "equal_weight" : "custom_weights",
+        price_field: "close",
+        rebalance_mode: "none",
+        fractional_units: true,
+        basket: { kind: "inline", constituents },
+        sip: {
+          amount,
+          day_of_month: dayOfMonth,
+          start_date: start,
+          end_date: endLatest || !end ? null : end,
+          as_of: null,
+        },
+        costs: {
+          brokerage_bps: 0,
+          stt_bps: 0,
+          slippage_bps: 0,
+          flat_fee: 0,
+        },
+      };
+    } else {
+      body.strategy_id = strategyId;
+    }
     return body;
-  }, [strategyId, amount, dayOfMonth, start, end, endLatest]);
+  }, [
+    basketMode,
+    strategyId,
+    createName,
+    createEqual,
+    createRows,
+    createSymbols.length,
+    amount,
+    dayOfMonth,
+    start,
+    end,
+    endLatest,
+  ]);
 
   const runBacktest = useCallback(async () => {
     if (!formValid) return;
@@ -475,7 +605,30 @@ export default function SipLabPage() {
               </div>
             ) : null}
 
+            <div className="mt-3 flex gap-1 rounded-md bg-[var(--bg-muted)] p-0.5">
+              {(
+                [
+                  ["pick", "Pick saved"],
+                  ["create", "Create new"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                    basketMode === mode
+                      ? "bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-sm"
+                      : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                  }`}
+                  onClick={() => setBasketMode(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div className="mt-3 space-y-3">
+              {basketMode === "pick" ? (
               <div>
                 <label htmlFor="sip-strategy" className={labelClass}>
                   SIP basket
@@ -548,6 +701,127 @@ export default function SipLabPage() {
                   <div className="mt-2 h-12 animate-pulse rounded-md bg-[var(--bg-muted)]" />
                 ) : null}
               </div>
+              ) : (
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="create-name" className={labelClass}>
+                    Basket name
+                  </label>
+                  <input
+                    id="create-name"
+                    className={`${inputClass} mt-1`}
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                    placeholder="My custom basket"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                  <input
+                    type="checkbox"
+                    checked={createEqual}
+                    onChange={(e) => setCreateEqual(e.target.checked)}
+                  />
+                  Equal weight (ignore weight column)
+                </label>
+                <div className="space-y-2">
+                  {createRows.map((row, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      {priceUniverse.length > 0 ? (
+                        <select
+                          className={`${inputClass} flex-1`}
+                          value={row.symbol}
+                          onChange={(e) => {
+                            const next = [...createRows];
+                            next[idx] = { ...row, symbol: e.target.value };
+                            setCreateRows(next);
+                          }}
+                        >
+                          {priceUniverse.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          className={`${inputClass} flex-1`}
+                          value={row.symbol}
+                          onChange={(e) => {
+                            const next = [...createRows];
+                            next[idx] = {
+                              ...row,
+                              symbol: e.target.value.toUpperCase(),
+                            };
+                            setCreateRows(next);
+                          }}
+                          placeholder="SYMBOL"
+                        />
+                      )}
+                      {!createEqual ? (
+                        <input
+                          className={`${inputClass} w-20`}
+                          value={row.weight}
+                          onChange={(e) => {
+                            const next = [...createRows];
+                            next[idx] = { ...row, weight: e.target.value };
+                            setCreateRows(next);
+                          }}
+                          placeholder="0.25"
+                          aria-label="Weight"
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                        onClick={() =>
+                          setCreateRows(createRows.filter((_, i) => i !== idx))
+                        }
+                        disabled={createRows.length <= 1}
+                        aria-label="Remove row"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-[var(--accent)] hover:underline"
+                  onClick={() => {
+                    const fallback =
+                      priceUniverse.find(
+                        (s) => !createRows.some((r) => r.symbol === s),
+                      ) ||
+                      priceUniverse[0] ||
+                      "TCS";
+                    setCreateRows([
+                      ...createRows,
+                      { symbol: fallback, weight: "0" },
+                    ]);
+                  }}
+                >
+                  + Add symbol
+                </button>
+                {!createEqual ? (
+                  <p
+                    className={`text-[11px] ${
+                      Math.abs(createWeightSum - 1) > 0.02
+                        ? "text-[var(--danger)]"
+                        : "text-[var(--text-muted)]"
+                    }`}
+                  >
+                    Weight sum: {createWeightSum.toFixed(3)} (need ≈ 1.0)
+                  </p>
+                ) : null}
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Symbols limited to curated prices
+                  {priceUniverse.length
+                    ? ` (${priceUniverse.length} available)`
+                    : ""}. Sync Upstox for more:{" "}
+                  <code className="text-[10px]">make sync-upstox</code>
+                </p>
+              </div>
+              )}
             </div>
           </div>
 

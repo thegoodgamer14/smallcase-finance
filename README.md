@@ -95,7 +95,9 @@ curl -s 'http://127.0.0.1:8000/smallcases/digital-india/metrics?window=ITD' | jq
 | `make api` | FastAPI on `127.0.0.1:8000` |
 | `make web` | Next.js on `localhost:3000` |
 | `make demo` | install → pipeline → test → print run instructions |
+| `make upstox-status` | Whether `UPSTOX_ACCESS_TOKEN` is set (never prints the token) |
 | `make sync-upstox` | Upstox historical prices → raw drop → pipeline (sample fallback if no token) |
+| `make sync-upstox YEARS=3 STRICT=1` | Live sync only — fail if no token / no bars |
 | `make clean-curated` | delete curated Parquet only (raw kept) |
 
 ### Env overrides
@@ -138,9 +140,11 @@ No yfinance, NSE bhavcopy, or Fyers in this product version. Sample/synthetic pr
 cp .env.example .env
 # Developer Apps → Generate access token → set UPSTOX_ACCESS_TOKEN=... (never commit .env)
 
-make sync-upstox              # default years → raw drop → pipeline
-make sync-upstox YEARS=5      # custom lookback years
-make sync-upstox FROM=2020-01-01 TO=2025-12-31   # custom timeline
+make upstox-status
+make sync-upstox YEARS=3 STRICT=1   # recommended personal path
+make sync-upstox YEARS=5            # custom lookback (sample fallback if no token)
+make sync-upstox FROM=2020-01-01 TO=2025-12-31
+# then: make api & make web → http://localhost:3000/sip-lab
 ```
 
 | Step | What happens |

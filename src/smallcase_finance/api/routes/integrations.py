@@ -11,8 +11,11 @@ from pydantic import BaseModel, Field
 from smallcase_finance.config import (
     UPSTOX_DEFAULT_YEARS,
     UPSTOX_SYNC_ENABLED,
+    kite_app_configured,
+    kite_session_configured,
     upstox_configured,
 )
+from smallcase_finance.integrations.kite.auth import KiteAuthError, kite_login_url
 from smallcase_finance.integrations.upstox.sync import resolve_lookback, sync_prices
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
@@ -149,3 +152,57 @@ def lookback_preview(
         "years_arg": years,
         "default_years": UPSTOX_DEFAULT_YEARS,
     }
+
+
+class KiteStatusResponse(BaseModel):
+    """Kite Connect readiness — never includes keys or tokens."""
+
+    provider: str = "kite"
+    app_configured: bool = Field(
+        description="True if KITE_API_KEY and KITE_API_SECRET are set"
+    )
+    session_configured: bool = Field(
+        description="True if KITE_ACCESS_TOKEN is set (daily login session)"
+    )
+    login_url: Optional[str] = Field(
+        default=None,
+        description="Browser login URL when app is configured; null otherwise",
+    )
+    hint: str
+
+
+@router.get("/kite/status", response_model=KiteStatusResponse)
+def kite_status() -> KiteStatusResponse:
+    """Report Kite app/session readiness (booleans + login URL only)."""
+    app_ok = kite_app_configured()
+    session_ok = kite_session_configured()
+    login: Optional[str] = None
+    if app_ok:
+        try:
+            login = kite_login_url()
+        except KiteAuthError:
+            login = None
+
+    if session_ok:
+        hint = (
+            "Session token present. Equity holdings: "
+            "`python -m smallcase_finance.integrations.kite holdings` "
+            "or make kite-holdings. Token expires ~6 AM IST next day."
+        )
+    elif app_ok:
+        hint = (
+            "App keys set but no access token. Kite does not issue tokens in the "
+            "developer console — run make kite-login, complete Zerodha login, then "
+            "make kite-exchange REQUEST_TOKEN=... See docs/integrations/kite-connect.md."
+        )
+    else:
+        hint = (
+            "Set KITE_API_KEY and KITE_API_SECRET in .env. "
+            "Historical prices stay Upstox-only; Kite is for holdings later."
+        )
+    return KiteStatusResponse(
+        app_configured=app_ok,
+        session_configured=session_ok,
+        login_url=login,
+        hint=hint,
+    )

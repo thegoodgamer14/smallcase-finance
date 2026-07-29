@@ -2,10 +2,11 @@
 
 **Product name:** SIP Lab (Basket Backtest Engine)  
 **Repo / package history:** `smallcase-finance` v0 (local smallcase NAV demo) → SIP Lab  
-**Status:** v0 **shipped**; SIP Lab **Phases 1–2 shipped** (engine + API + `/sip-lab` UI); next = Phase 3 hardening  
+**Status:** v0 **shipped**; SIP Lab **Phases 1–2 shipped**; **live Upstox history path verified** (local `.env`); next = Phase 3 hardening  
 **Binding decisions:** [ADR 004](docs/decisions/004-sip-lab-prd-decisions.md) · [ADR 005](docs/decisions/005-upstox-sole-market-data.md)  
 **Phased plan:** [docs/ROADMAP.md](docs/ROADMAP.md)  
-**SIP Lab ship writeup:** [docs/build-report-sip-lab-ui.md](docs/build-report-sip-lab-ui.md)
+**SIP Lab ship writeup:** [docs/build-report-sip-lab-ui.md](docs/build-report-sip-lab-ui.md)  
+**Upstox connect:** [docs/integrations/upstox.md](docs/integrations/upstox.md) §0 founder daily path
 
 ---
 
@@ -99,13 +100,24 @@ Access tokens expire ~**3:30 AM IST** the following day (per Upstox); re-generat
 | **Fixture tolerance** | Absolute **`1e-4`** on golden XIRR tests |
 | **Secondary metrics** | NAV path, CAGR, vol, max DD remain available; do not replace XIRR for SIP success |
 
+### Where the founder’s money lives (product map)
+
+| Venue | What it holds | Role in SIP Lab today |
+|-------|----------------|------------------------|
+| **Kite** | Live equities | Future Phase 4 import only — **no Kite backend this sprint**; **not** used for OHLCV |
+| **Coin** | Live mutual funds | Deferred (after Kite equity); **not** for OHLCV |
+| **This app** | Authored baskets + SIP backtests | Primary surface now (`/sip-lab`) |
+| **Upstox** | — | **Historical prices only** (API) |
+
+Kite does **not** provide a simple “copy access token from developer portal” like Upstox Generate; session tokens require a login/request_token flow when we implement import later.
+
 ### Deferred / out of band
 
 | Item | Policy |
 |------|--------|
 | **Coin / MF** | **Deferred.** No Coin import APIs, MF holdings endpoints, or MF NAV engine this version. |
-| **Kite** | Phase 4 roadmap only — equity book import + live-vs-SIP compare; **not** a price source. Spec: [kite-connect.md](docs/integrations/kite-connect.md). |
-| **Hosting** | Local-first; free-tier hosting optional later; no multi-tenant assumption. |
+| **Kite** | Phase 4 roadmap only — equity book import + live-vs-SIP compare; **not** a price source; **no backend work until a dedicated Kite plan**. Spec: [kite-connect.md](docs/integrations/kite-connect.md). |
+| **Hosting** | Local-first; free-tier hosting optional later; personal-use security (secrets in `.env`, no multi-tenant auth). |
 | **Repo** | Remains **public**. Secrets only in env / gitignored `.env`. `.env.example` = empty placeholders. |
 
 ### Explicit non-goals (this version)

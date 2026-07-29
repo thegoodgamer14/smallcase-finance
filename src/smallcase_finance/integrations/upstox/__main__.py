@@ -111,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.json:
+        # Never include tokens; SyncResult has no secrets
         print(json.dumps(result.to_dict(), indent=2))
     else:
         print(result.message)
@@ -123,10 +124,53 @@ def main(argv: list[str] | None = None) -> int:
             f"fetched={len(result.fetched_symbols)} skipped={len(result.skipped_symbols)} "
             f"rows={result.row_count}"
         )
+        if result.used_sample_fallback:
+            print(
+                "\n[demo] Used sample prices (not live Upstox).\n"
+                "  1) Set UPSTOX_ACCESS_TOKEN in .env (portal Generate token)\n"
+                "  2) make sync-upstox YEARS=3\n"
+                "  See docs/integrations/upstox.md",
+                file=sys.stderr,
+            )
+        elif result.row_count == 0:
+            print(
+                "\n[error] No bars written. Common causes:\n"
+                "  - Access token expired (regenerate in Upstox portal ~daily)\n"
+                "  - Missing instrument_key map for symbols\n"
+                "  - API rate limit / network\n"
+                "  See docs/integrations/upstox.md",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "\nNext: make pipeline (if not already) → make api & make web → "
+                "http://localhost:3000/sip-lab",
+                file=sys.stderr,
+            )
 
     if result.used_sample_fallback and args.no_sample_fallback:
         return 1
+    if result.used_sample_fallback:
+        # Soft success for demos; non-zero when strict flag set above
+        return 0
     if not result.used_sample_fallback and result.row_count == 0 and result.requested_symbols:
+        return 1
+    # Auth failure often yields all skipped with auth warnings
+    auth_fails = sum(
+        1
+        for w in result.warnings
+        if "auth" in w.lower() or "401" in w or "403" in w or "token" in w.lower()
+    )
+    if (
+        result.fetched_symbols == []
+        and result.requested_symbols
+        and auth_fails > 0
+    ):
+        print(
+            "\n[error] Upstox rejected authentication. Regenerate UPSTOX_ACCESS_TOKEN "
+            "in the developer portal and update .env (never commit .env).",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

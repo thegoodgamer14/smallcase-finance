@@ -122,6 +122,40 @@ def symbols_from_smallcase_defs(paths: Sequence[Path] | None = None) -> list[str
     return sorted(symbols)
 
 
+def symbols_from_strategy_configs() -> list[str]:
+    """Union of symbols from file-backed SIP strategies under config/strategies/."""
+    try:
+        from smallcase_finance.config import STRATEGIES_DIR
+        from smallcase_finance.strategies.loader import load_strategy_config
+        from smallcase_finance.strategies.models import InlineBasket
+    except Exception as exc:
+        logger.warning("strategy symbol discovery unavailable: %s", exc)
+        return []
+
+    symbols: set[str] = set()
+    root = STRATEGIES_DIR
+    if not root.is_dir():
+        return []
+    for path in sorted(root.iterdir()):
+        if path.suffix.lower() not in {".yaml", ".yml", ".json"}:
+            continue
+        try:
+            cfg = load_strategy_config(path)
+        except Exception as exc:
+            logger.warning("skip strategy file %s: %s", path.name, exc)
+            continue
+        if isinstance(cfg.basket, InlineBasket):
+            for c in cfg.basket.constituents:
+                symbols.add(str(c.symbol).strip().upper())
+        # smallcase_ref baskets: covered by symbols_from_smallcase_defs
+    return sorted(symbols)
+
+
+def default_sync_symbols() -> list[str]:
+    """Union of smallcase + strategy symbols for a full personal sync."""
+    return sorted(set(symbols_from_smallcase_defs()) | set(symbols_from_strategy_configs()))
+
+
 def candles_to_frame(bars: Iterable[CandleBar], *, source: str = "upstox") -> pl.DataFrame:
     rows = [
         {
@@ -203,7 +237,7 @@ def sync_prices(
     requested = (
         sorted({s.strip().upper() for s in symbols if s and s.strip()})
         if symbols
-        else symbols_from_smallcase_defs()
+        else default_sync_symbols()
     )
     result = SyncResult(from_date=start, to_date=end, requested_symbols=requested)
 

@@ -166,9 +166,21 @@ export function getStrategy(id: string): Promise<StrategyDetail> {
   );
 }
 
+export interface PriceUniverseResponse {
+  symbols: string[];
+  count: number;
+  hint: string;
+}
+
+/** Symbols available in curated prices for on-platform create-basket. */
+export function getPriceUniverse(): Promise<PriceUniverseResponse> {
+  return apiFetch<PriceUniverseResponse>("/strategies/meta/price-universe");
+}
+
 /**
  * Run monthly SIP cashflow backtest (primary metric XIRR).
  * Uses POST /backtests/sip — never the v0 rebalance POST /backtest.
+ * Pass ``strategy`` (inline) or ``strategy_id`` (file-backed).
  */
 export function postSipBacktest(
   body: SipBacktestRequest,

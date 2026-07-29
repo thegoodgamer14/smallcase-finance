@@ -75,3 +75,31 @@ UPSTOX_SYNC_ENABLED: bool = os.environ.get("UPSTOX_SYNC_ENABLED", "").strip() in
 def upstox_configured() -> bool:
     """True when a non-empty access token is present (value is never logged)."""
     return bool(UPSTOX_ACCESS_TOKEN)
+
+
+# ── Kite Connect (equity holdings read-only; not a price source) ────────────
+# Access token is NOT issued in the developer console. Daily login flow:
+#   login URL → request_token on redirect → POST /session/token (checksum) → access_token
+# Token expires ~6 AM IST next day (regulatory).
+KITE_API_KEY: str = os.environ.get("KITE_API_KEY", "").strip()
+KITE_API_SECRET: str = os.environ.get("KITE_API_SECRET", "").strip()
+KITE_ACCESS_TOKEN: str = os.environ.get("KITE_ACCESS_TOKEN", "").strip()
+KITE_REDIRECT_URI: str = os.environ.get(
+    "KITE_REDIRECT_URI", "https://smallcase-sip-lab.vercel.app/callback/kite"
+).strip()
+KITE_API_BASE: str = os.environ.get(
+    "KITE_API_BASE", "https://api.kite.trade"
+).rstrip("/")
+KITE_LOGIN_BASE: str = os.environ.get(
+    "KITE_LOGIN_BASE", "https://kite.zerodha.com/connect/login"
+).rstrip("/")
+
+
+def kite_app_configured() -> bool:
+    """True when API key + secret are set (enough to start login / exchange)."""
+    return bool(KITE_API_KEY and KITE_API_SECRET)
+
+
+def kite_session_configured() -> bool:
+    """True when a session access_token is present (value never logged)."""
+    return bool(KITE_API_KEY and KITE_ACCESS_TOKEN)

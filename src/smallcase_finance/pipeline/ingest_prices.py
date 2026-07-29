@@ -126,8 +126,28 @@ def load_raw_prices(root: Path | None = None) -> pl.DataFrame:
     df = df.select(list(PRICE_SCHEMA.keys()))
     df = df.drop_nulls(subset=["symbol", "date", "close"])
     df = df.filter(pl.col("close") > 0)
-    # last-wins on PK
-    df = df.unique(subset=["symbol", "date"], keep="last").sort(["symbol", "date"])
+    # Prefer live Upstox over sample/demo when both cover the same (symbol, date).
+    # Rank: upstox=2, other=1, sample/demo/synthetic=0 → keep last after sort.
+    src = pl.col("source").cast(pl.Utf8).fill_null("").str.to_lowercase()
+    rank = (
+        pl.when(src.str.contains("upstox"))
+        .then(pl.lit(2))
+        .when(
+            src.str.contains("sample")
+            | src.str.contains("demo")
+            | src.str.contains("synthetic")
+        )
+        .then(pl.lit(0))
+        .otherwise(pl.lit(1))
+        .alias("_src_rank")
+    )
+    df = (
+        df.with_columns(rank)
+        .sort(["symbol", "date", "_src_rank"])
+        .unique(subset=["symbol", "date"], keep="last")
+        .drop("_src_rank")
+        .sort(["symbol", "date"])
+    )
 
     # light pydantic sample validation (first/last few rows)
     sample = df.head(5).to_dicts() + df.tail(5).to_dicts()

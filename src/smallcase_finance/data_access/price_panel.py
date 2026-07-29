@@ -39,6 +39,30 @@ def _coerce_date(v: Any) -> Optional[date]:
     return None
 
 
+def list_curated_symbols() -> list[str]:
+    """Distinct symbols in curated prices.parquet (sorted). Empty if missing."""
+    path = parquet("prices")
+    if not table_exists(path):
+        return []
+    try:
+        rows = read_parquet_sql(
+            path,
+            columns="DISTINCT symbol",
+            order_by="symbol",
+        )
+    except Exception:
+        return []
+    out: list[str] = []
+    for row in rows:
+        v = row.get("symbol")
+        if v is None:
+            continue
+        s = str(v).strip().upper()
+        if s:
+            out.append(s)
+    return out
+
+
 def classify_data_source(sources: Sequence[str] | set[str] | frozenset[str]) -> str:
     """Map raw ``source`` column values → product label.
 
@@ -143,11 +167,9 @@ def build_price_panel_from_rows(
     if field not in {"close", "adj_close"}:
         field = "close"
 
-    by_symbol: dict[str, dict[date, float]] = {s: {} for s in wanted}
-    source_vals: set[str] = set()
-    session_set: set[date] = set()
-    warnings: list[str] = []
-
+    # When live Upstox bars exist for this universe, ignore sample/demo rows so
+    # SIP Lab does not report data_source=mixed after a successful sync.
+    scoped: list[Mapping[str, Any]] = []
     for r in rows:
         sym = str(r.get("symbol", "")).strip().upper()
         if sym not in wanted_set:
@@ -158,6 +180,26 @@ def build_price_panel_from_rows(
         if start is not None and d < start:
             continue
         if end is not None and d > end:
+            continue
+        scoped.append(r)
+
+    def _is_upstox_src(r: Mapping[str, Any]) -> bool:
+        s = str(r.get("source") or "").strip().lower()
+        return "upstox" in s
+
+    has_upstox = any(_is_upstox_src(r) for r in scoped)
+    if has_upstox:
+        scoped = [r for r in scoped if _is_upstox_src(r)]
+
+    by_symbol: dict[str, dict[date, float]] = {s: {} for s in wanted}
+    source_vals: set[str] = set()
+    session_set: set[date] = set()
+    warnings: list[str] = []
+
+    for r in scoped:
+        sym = str(r.get("symbol", "")).strip().upper()
+        d = _coerce_date(r.get("date"))
+        if d is None:
             continue
         raw = r.get(field)
         if raw is None and field == "adj_close":

@@ -188,28 +188,61 @@ def kite_oauth_callback(
     status: Optional[str] = Query(default=None),
     action: Optional[str] = Query(default=None),
 ) -> HTMLResponse:
-    """Placeholder Kite redirect target (Phase 4 — no token exchange yet).
+    """Kite Connect redirect: exchange request_token → access_token (personal use).
 
-    Register e.g. ``https://&lt;service&gt;.onrender.com/callback/kite`` on the
-    Kite developer console so app creation succeeds. Full exchange lands in Phase 4.
+    Register this exact path on developers.kite.trade, e.g.::
+
+        https://smallcase-sip-lab.vercel.app/callback/kite
+        http://127.0.0.1:8000/callback/kite
+
+    Env: ``KITE_API_KEY``, ``KITE_API_SECRET``. Never log tokens.
     """
+    from smallcase_finance.integrations.kite.auth import (
+        KiteAuthError,
+        exchange_request_token,
+    )
+
     _ = action
+    if status == "error" or (status and status.lower() == "error"):
+        return _page(
+            "Kite login cancelled or failed",
+            f'<p class="err">status=<code>{html.escape(status or "")}</code></p>',
+            status_code=400,
+        )
+
     if not request_token:
         return _page(
             "Kite callback",
-            "<p>No <code>request_token</code>. This path is reserved for Phase 4 "
-            "equity holdings import. See <code>docs/integrations/kite-connect.md</code>.</p>",
+            "<p>No <code>request_token</code>. Start with "
+            "<code>make kite-login</code> and complete Zerodha login. "
+            "See <code>docs/integrations/kite-connect.md</code>.</p>",
             status_code=400,
         )
-    # Do not log request_token
+
+    try:
+        session = exchange_request_token(request_token)
+    except KiteAuthError as exc:
+        logger.warning("Kite token exchange failed: %s", type(exc).__name__)
+        return _page(
+            "Kite token exchange failed",
+            f'<p class="err">{html.escape(str(exc))}</p>'
+            "<p>Check KITE_API_KEY / KITE_API_SECRET and that the request_token "
+            "was not reused (single-use, short lifetime).</p>",
+            status_code=502,
+        )
+
+    safe = html.escape(session.access_token)
+    who = html.escape(session.user_name or session.user_id or "ok")
     return _page(
-        "Kite request_token received",
+        "Kite access token ready",
         f"""
-<p class="ok">Login redirect reached this app (status=
-<code>{html.escape(status or "n/a")}</code>).</p>
-<p>Token exchange is <strong>not implemented</strong> in this product version.
-Copy the request_token from the browser address bar if you are testing Kite
-manually; product wiring is Phase 4 only.</p>
-<p class="warn">request_token length: {len(request_token)} (value not shown).</p>
+<p class="ok">Login successful ({who}).</p>
+<p class="warn"><strong>Copy into local <code>.env</code></strong> as
+<code>KITE_ACCESS_TOKEN</code> (never commit). Expires ~6:00&nbsp;AM IST next day.</p>
+<pre>{safe}</pre>
+<p>Then: <code>make kite-holdings</code> or
+<code>python -m smallcase_finance.integrations.kite holdings</code>.</p>
+<p><a href="/integrations/kite/status">Kite status</a> ·
+<a href="/docs">API docs</a></p>
 """,
     )

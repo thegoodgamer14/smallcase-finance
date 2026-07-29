@@ -263,16 +263,25 @@ def test_upstox_provider_sync_to_raw_delegates(
 
 
 def test_config_api_key_is_not_bearer_alias(monkeypatch: pytest.MonkeyPatch):
-    """UPSTOX_API_KEY is client_id, not a substitute for UPSTOX_ACCESS_TOKEN."""
-    monkeypatch.delenv("UPSTOX_ACCESS_TOKEN", raising=False)
-    monkeypatch.setenv("UPSTOX_API_KEY", "portal-api-key-not-a-token")
-    monkeypatch.setenv("UPSTOX_API_SECRET", "portal-secret")
-    # Re-read config module values as the client would at construct time
+    """UPSTOX_API_KEY is client_id, not a substitute for UPSTOX_ACCESS_TOKEN.
+
+    Isolates from a founder ``.env`` by patching module attributes after reload
+    (``load_dotenv(override=False)`` would re-fill ACCESS_TOKEN from file if
+    we only deleted the env var).
+    """
     import importlib
 
     import smallcase_finance.config as cfg
 
+    monkeypatch.setenv("UPSTOX_API_KEY", "portal-api-key-not-a-token")
+    monkeypatch.setenv("UPSTOX_API_SECRET", "portal-secret")
+    monkeypatch.delenv("UPSTOX_ACCESS_TOKEN", raising=False)
+    # Prevent .env from re-injecting a real access token during reload
+    monkeypatch.setattr(cfg, "_env_file", type(cfg._env_file)("/nonexistent/.env"))
     importlib.reload(cfg)
+    monkeypatch.setattr(cfg, "UPSTOX_ACCESS_TOKEN", "")
+    monkeypatch.setattr(cfg, "UPSTOX_API_KEY", "portal-api-key-not-a-token")
+    monkeypatch.setattr(cfg, "UPSTOX_API_SECRET", "portal-secret")
     assert cfg.UPSTOX_ACCESS_TOKEN == ""
     assert cfg.UPSTOX_API_KEY == "portal-api-key-not-a-token"
     assert cfg.UPSTOX_API_SECRET == "portal-secret"

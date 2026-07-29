@@ -1,91 +1,122 @@
-# Kite Connect — future plan only (Phase 4+)
+# Kite Connect — equity holdings (read-only)
 
-> **Status: NOT IMPLEMENTED.**  
-> This version of SIP Lab / Basket Backtest Engine has **no** Kite runtime APIs, **no** Coin / mutual-fund import, and **no** MF NAV path.  
-> Historical equity/ETF OHLCV is **Upstox-only** today. See [upstox.md](./upstox.md).
+**Role:** Live **equity book** from Zerodha Kite.  
+**Not a price source.** Historical OHLCV stays **Upstox-only** (ADR 005).
 
-This document is a **forward plan** for implementers (Phase 4+). Do not treat it as a current feature.
+**Status:** Login + token exchange + holdings smoke CLI implemented. Full “book vs SIP compare” UI is next.
 
-## Scope when we get there
+---
 
-| In scope later | Explicitly out |
-|----------------|----------------|
-| **Read-only** import of **equity** holdings from Zerodha Kite | Order placement / live trading |
-| Compare live equity portfolio vs SIP backtest of a strategy | F&O positions |
-| Map Kite symbols → local instrument / basket keys | Paid multi-broker sprawl |
-| | **Coin MF** holdings / NAV (deferred **after** equity import) |
+## Why no access token on the developer portal
 
-**Coin / mutual funds:** planned even later than Kite equity import. Do not implement Coin APIs, MF holdings endpoints, or an MF NAV engine in this product version.
+Kite **does not** issue a permanent access token in the app console. You only get:
 
-## Why later
+| Credential | Where |
+|------------|--------|
+| `api_key` | developers.kite.trade app |
+| `api_secret` | developers.kite.trade app (server-side only) |
+| `access_token` | **Daily login flow** after you complete Zerodha login |
 
-Product order is fixed:
+Official flow: [User / Login](https://kite.trade/docs/connect/v3/user/)
 
-1. Correct SIP / basket backtest engine (XIRR primary)
-2. UI polish
-3. Kite **equity** holdings import (this doc)
-4. Coin / MF last (if ever in this repo)
+```text
+1. Open https://kite.zerodha.com/connect/login?v=3&api_key=<API_KEY>
+2. User logs in + 2FA
+3. Redirect to your registered URL with ?request_token=...
+4. Server POST https://api.kite.trade/session/token
+     api_key + request_token + checksum
+     checksum = SHA-256(api_key + request_token + api_secret)
+5. Response includes access_token (until ~6 AM IST next day)
+6. Calls use: Authorization: token api_key:access_token
+```
 
-## Intended future use (equities only)
+**Redirect URL** for this project (register exactly one or both):
 
-When Phase 4 lands, Kite Connect would support **portfolio comparison**, not market-data sourcing:
+```text
+https://smallcase-sip-lab.vercel.app/callback/kite
+http://127.0.0.1:8000/callback/kite
+```
 
-1. User authorizes a personal Kite app (API key + secret; access token via login flow).
-2. App pulls **equity holdings** (and optionally positions) via the official Portfolio APIs.
-3. Holdings land under something like `data/raw/holdings/{date}_kite/` → curated snapshots.
-4. UI/API compare **actual equity book** vs **SIP backtest** of the author’s basket strategy.
+Leave **postback URL** blank (orders/GTT — we do not place orders).
 
-Prices for backtests remain **Upstox historical candles**. Kite is not planned as a candle provider in this product version.
+---
 
-## Non-goals (forever in this product line unless vision changes)
+## Local setup
 
-- Placing, modifying, or cancelling orders
-- GTT / alerts / streaming ticks as product features
-- Multi-user SaaS auth around broker tokens
-- Committing API secrets (repo stays public)
+```bash
+# .env (never commit)
+KITE_API_KEY=...
+KITE_API_SECRET=...
+KITE_REDIRECT_URI=https://smallcase-sip-lab.vercel.app/callback/kite
+# after login:
+KITE_ACCESS_TOKEN=...
+```
 
-## References for future implementers
+```bash
+make kite-login
+# complete login in browser → copy request_token from redirect URL
+make kite-exchange REQUEST_TOKEN=xxxxxxxx
+# paste printed KITE_ACCESS_TOKEN into .env, then:
+make kite-profile
+make kite-holdings
+```
 
-| Resource | URL |
-|----------|-----|
-| Kite Connect docs | [https://kite.trade/docs/connect/v3/](https://kite.trade/docs/connect/v3/) |
-| Portfolio / holdings | [https://kite.trade/docs/connect/v3/portfolio/](https://kite.trade/docs/connect/v3/portfolio/) |
-| Official Python client | [https://github.com/zerodha/pykiteconnect](https://github.com/zerodha/pykiteconnect) |
-| Developer console | [https://developers.kite.trade/](https://developers.kite.trade/) |
+Or use FastAPI callback (if redirect is `http://127.0.0.1:8000/callback/kite`):
 
-Env names (when implemented — **do not** wire product runtime yet). You may store keys in local `.env` now:
+```bash
+make api
+# open login URL from make kite-login; after redirect, token page shows access_token
+```
 
-| Env | Purpose |
-|-----|---------|
-| `KITE_API_KEY` | API key from developers.kite.trade |
-| `KITE_API_SECRET` | API secret (server-side only) |
-| `KITE_ACCESS_TOKEN` | Daily session token after login (not needed until Phase 4) |
-| `KITE_REDIRECT_URI` | `https://smallcase-sip-lab.vercel.app/callback/kite` |
+Or Vercel: set `KITE_API_KEY` + `KITE_API_SECRET` on the project, open login URL, callback at  
+`https://smallcase-sip-lab.vercel.app/callback/kite` exchanges and displays the token once.
 
-**What to do after creating the Kite app (today):**
+---
 
-1. Put `KITE_API_KEY` + `KITE_API_SECRET` in **local** `.env` only (never commit).  
-2. Confirm redirect URL on the console is `https://smallcase-sip-lab.vercel.app/callback/kite`.  
-3. Leave **postback URL blank** (orders/GTT — we do not place orders).  
-4. **Do not** start building holdings import until Phase 4 (SIP engine first).  
-5. No daily access token is required until you deliberately test the login flow later.
+## API (this app)
 
-Confirm env names against current Zerodha docs at implementation time. Never commit `.env`.
+| Method | Path | Notes |
+|--------|------|--------|
+| GET | `/integrations/kite/status` | Booleans + optional `login_url` — **no secrets** |
+| GET | `/callback/kite` | Exchange `request_token` → show `access_token` once |
 
-## Agent / MCP note
+Holdings import CLI:
 
-The **MCP `kite_connect_api` server** may be used by agents for **API mapping validation** (endpoint shapes, field names) during design reviews. It is **not** product runtime and must not be called from FastAPI, the pipeline, or the Next.js app.
+```bash
+python -m smallcase_finance.integrations.kite holdings
+```
 
-## Implementation checklist (Phase 4 — not this release)
+---
 
-- [ ] ADR: Kite equity holdings import only; no orders; Coin deferred
-- [ ] Thin client under `src/smallcase_finance/integrations/kite/` (read holdings only)
-- [ ] Raw drop layout + pipeline path to `holdings_snapshots`
-- [ ] Compare endpoint/UI: live equity vs SIP backtest
-- [ ] Secrets via env only; public-repo safe
-- [ ] No Coin / MF code until a later phase
+## Product map
+
+| Your book | Integration |
+|-----------|-------------|
+| **Kite equity** | This module (holdings read-only) |
+| **Coin MF** | Later (not this slice) |
+| **smallcase.com invest** | Future vision; create/backtest baskets **in this app** today |
+| **Prices for backtests** | Upstox only |
+
+---
+
+## Non-goals
+
+- Order placement, GTT, streaming ticks  
+- Using Kite as historical candle vendor  
+- Multi-user SaaS token vault  
+
+---
+
+## Code
+
+| Path | Role |
+|------|------|
+| `integrations/kite/auth.py` | login URL, checksum, token exchange |
+| `integrations/kite/client.py` | profile + holdings |
+| `integrations/kite/__main__.py` | CLI |
+| `apps/web/.../callback/kite/route.ts` | Vercel exchange helper |
 
 ## Related
 
-- Price source (current): [upstox.md](./upstox.md), [ADR 003](../decisions/003-upstox-price-source.md)
-- Product vision / non-goals: [PRODUCT.md](../../PRODUCT.md)
+- Prices: [upstox.md](./upstox.md)  
+- SIP Lab: [ROADMAP](../ROADMAP.md)  

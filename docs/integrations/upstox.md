@@ -21,6 +21,35 @@
 
 Smallcase **definitions** stay as local JSON under `data/raw/smallcases/`. Upstox supplies **prices only**.
 
+Kite / Coin hold your **live portfolio** (stocks / MFs). This app does **not** use them for historical OHLCV. Kite backend import is a **later** phase — not part of the Upstox connection path.
+
+---
+
+## 0) Founder daily path (personal use — easiest)
+
+**Job:** refresh history and open SIP Lab on real bars.
+
+```bash
+# 1) Token in gitignored .env (portal → your app → Generate access token)
+#    UPSTOX_ACCESS_TOKEN=...
+#    Token dies ~3:30 AM IST the next day — re-Generate when sync returns 401.
+
+make upstox-status              # configured=True? never prints the token
+make sync-upstox YEARS=3 STRICT=1   # fail hard if no token / no bars
+# default: also pulls symbols from config/strategies + data/raw/smallcases
+
+make api    # terminal 1 → http://127.0.0.1:8000
+make web    # terminal 2 → http://localhost:3000/sip-lab
+```
+
+| Flag | Meaning |
+|------|---------|
+| `YEARS=N` / `FROM=` / `TO=` | Custom lookback |
+| `SYMBOLS=TCS,INFY` | Override universe |
+| `STRICT=1` | No silent sample fallback |
+
+If token missing/expired, CLI prints next steps (see portal Generate). Prefer daytime syncs so the token is still valid.
+
 ---
 
 ## 1) Developer portal setup
