@@ -24,6 +24,8 @@ CURATED_FILES: dict[str, str] = {
     "nav_series": "nav/nav_series.parquet",
     "metrics_snapshot": "metrics/metrics_snapshot.parquet",
     "contribution": "metrics/contribution.parquet",
+    # Live founder equity book (Kite snapshot) — Portfolio Decision v1
+    "portfolio_holdings": "portfolio/holdings_snapshot.parquet",
 }
 
 

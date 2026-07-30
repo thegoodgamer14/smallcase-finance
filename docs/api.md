@@ -34,6 +34,33 @@ If curated data is missing, run `make pipeline` (or `python -m smallcase_finance
 
 ## Endpoints
 
+### Portfolio (Kite equity book — Portfolio Decision v1)
+
+```bash
+curl -s http://127.0.0.1:8000/portfolio/status | jq
+# Requires KITE_API_KEY + KITE_ACCESS_TOKEN:
+curl -s -X POST http://127.0.0.1:8000/portfolio/refresh | jq
+curl -s http://127.0.0.1:8000/portfolio/holdings/latest | jq
+curl -s http://127.0.0.1:8000/portfolio/symbols | jq
+```
+
+### Decision Lab
+
+```bash
+curl -s 'http://127.0.0.1:8000/decisions/price-coverage?symbols=INFY,TCS' | jq
+curl -s -X POST http://127.0.0.1:8000/decisions/run \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "basket": {"mode": "equal_weight", "constituents": [{"symbol": "INFY"}, {"symbol": "TCS"}]},
+    "sip": {"amount": 10000, "day_of_month": 1, "start_date": "2023-01-01"},
+    "benchmark_symbol": "NIFTYBEES",
+    "include_benchmark": true,
+    "include_weight_gap": true
+  }' | jq
+```
+
+Primary metric remains **XIRR** via the SIP engine. Sample prices are labeled; `STRICT_MARKET_DATA=1` rejects sample runs.
+
 ### Health
 
 ```bash

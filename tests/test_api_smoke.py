@@ -18,6 +18,33 @@ def test_health_ok():
     assert "data_reachable" in body
 
 
+def test_portfolio_status_no_secrets():
+    r = client.get("/portfolio/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert "kite_app_configured" in body
+    assert "kite_session_configured" in body
+    assert "has_snapshot" in body
+    # Never leak tokens
+    blob = str(body).lower()
+    assert "access_token" not in blob
+    assert "api_secret" not in blob
+
+
+def test_portfolio_holdings_404_without_snapshot():
+    # Without a personal snapshot, latest may 404 — both OK depending on env
+    r = client.get("/portfolio/holdings/latest")
+    assert r.status_code in (200, 404)
+
+
+def test_decisions_price_coverage():
+    r = client.get("/decisions/price-coverage", params={"symbols": "INFY,TCS"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "symbols" in body
+    assert "data_source" in body
+
+
 def test_cors_allows_next_origin():
     r = client.options(
         "/smallcases",

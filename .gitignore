@@ -69,6 +69,11 @@ data/raw/holdings/**
 !data/raw/holdings/
 !data/raw/holdings/.gitkeep
 
+# Live Kite portfolio snapshots (personal PII / positions)
+data/curated/portfolio/**
+!data/curated/portfolio/
+!data/curated/portfolio/.gitkeep
+
 *.parquet.bak
 data/**/*.parquet.bak
 

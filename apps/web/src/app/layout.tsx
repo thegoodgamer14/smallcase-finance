@@ -14,9 +14,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Smallcase Finance",
+  title: "Backtest Hero",
   description:
-    "Local-first analysis for Smallcase-style thematic portfolios — NAV, risk, holdings.",
+    "Personal portfolio view (Kite) + Decision Lab SIP backtests — local-first.",
 };
 
 function ShellFallback() {

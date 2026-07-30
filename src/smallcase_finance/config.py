@@ -103,3 +103,26 @@ def kite_app_configured() -> bool:
 def kite_session_configured() -> bool:
     """True when a session access_token is present (value never logged)."""
     return bool(KITE_API_KEY and KITE_ACCESS_TOKEN)
+
+
+# ── Portfolio Decision v1 ───────────────────────────────────────────────────
+# Default SIP benchmark (equity/ETF ticker present in curated prices when possible).
+DEFAULT_BENCHMARK_SYMBOL: str = (
+    os.environ.get("DEFAULT_BENCHMARK_SYMBOL", "NIFTYBEES").strip().upper()
+    or "NIFTYBEES"
+)
+# When true, POST /decisions/run rejects sample/partial coverage as non-actionable.
+STRICT_MARKET_DATA: bool = os.environ.get("STRICT_MARKET_DATA", "").strip() in {
+    "1",
+    "true",
+    "True",
+    "yes",
+    "YES",
+}
+# Optional override for portfolio curated dir (defaults under DATA_CURATED_ROOT).
+PORTFOLIO_CURATED_DIR: Path = Path(
+    os.environ.get(
+        "PORTFOLIO_CURATED_PATH",
+        DATA_CURATED_ROOT / "portfolio",
+    )
+).expanduser().resolve()

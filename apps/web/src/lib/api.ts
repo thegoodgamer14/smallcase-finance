@@ -1,8 +1,14 @@
 import type {
+  DecisionRunRequest,
+  DecisionRunResponse,
   HealthResponse,
   HoldingsResponse,
   MetricsResponse,
   PerformanceResponse,
+  PortfolioResponse,
+  PortfolioStatusResponse,
+  PortfolioSymbolsResponse,
+  PriceCoverageResponse,
   SipBacktestRequest,
   SipBacktestResponse,
   SmallcaseDetail,
@@ -53,8 +59,17 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      const body = (await res.json()) as { detail?: string };
-      if (body.detail) detail = body.detail;
+      const body = (await res.json()) as {
+        detail?: string | { message?: string; error_code?: string };
+      };
+      if (typeof body.detail === "string") {
+        detail = body.detail;
+      } else if (body.detail && typeof body.detail === "object") {
+        detail =
+          body.detail.message ||
+          body.detail.error_code ||
+          JSON.stringify(body.detail);
+      }
     } catch {
       /* ignore */
     }
@@ -186,6 +201,46 @@ export function postSipBacktest(
   body: SipBacktestRequest,
 ): Promise<SipBacktestResponse> {
   return apiFetch<SipBacktestResponse>("/backtests/sip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+// ── Portfolio Decision v1 ────────────────────────────────────────────────────
+
+export function getPortfolioStatus(): Promise<PortfolioStatusResponse> {
+  return apiFetch<PortfolioStatusResponse>("/portfolio/status");
+}
+
+export function refreshPortfolio(): Promise<PortfolioResponse> {
+  return apiFetch<PortfolioResponse>("/portfolio/refresh", { method: "POST" });
+}
+
+export function getPortfolioHoldingsLatest(): Promise<PortfolioResponse> {
+  return apiFetch<PortfolioResponse>("/portfolio/holdings/latest");
+}
+
+export function getPortfolioSymbols(): Promise<PortfolioSymbolsResponse> {
+  return apiFetch<PortfolioSymbolsResponse>("/portfolio/symbols");
+}
+
+export function getPriceCoverage(
+  symbols: string[],
+): Promise<PriceCoverageResponse> {
+  const q = symbols
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean)
+    .join(",");
+  return apiFetch<PriceCoverageResponse>(
+    `/decisions/price-coverage?symbols=${encodeURIComponent(q)}`,
+  );
+}
+
+export function postDecisionRun(
+  body: DecisionRunRequest,
+): Promise<DecisionRunResponse> {
+  return apiFetch<DecisionRunResponse>("/decisions/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

@@ -23,9 +23,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from smallcase_finance import __version__
 from smallcase_finance.api.routes import (
     backtest,
+    decision,
     health,
     integrations,
     oauth,
+    portfolio,
     sip_backtest,
     smallcases,
     strategies,
@@ -56,7 +58,7 @@ def create_app() -> FastAPI:
         version=__version__,
         description=(
             "Local-first smallcase composition, NAV, performance, metrics, "
-            "and SIP Lab (monthly SIP + XIRR). "
+            "SIP Lab (monthly SIP + XIRR), Kite portfolio, and Decision Lab. "
             "Contracts: docs/architecture/backend.md · docs/api.md. "
             "Deploy: docs/deploy/render.md."
         ),
@@ -75,6 +77,8 @@ def create_app() -> FastAPI:
     app.include_router(backtest.router)
     app.include_router(strategies.router)
     app.include_router(sip_backtest.router)
+    app.include_router(portfolio.router)
+    app.include_router(decision.router)
     app.include_router(integrations.router)
     app.include_router(oauth.router)
 

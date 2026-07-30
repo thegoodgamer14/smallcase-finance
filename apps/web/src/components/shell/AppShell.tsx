@@ -5,6 +5,8 @@ import {
   FlaskConical,
   LayoutDashboard,
   PieChart,
+  Scale,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -22,10 +24,12 @@ import { useApp } from "@/lib/context";
 import { formatDate } from "@/lib/format";
 
 const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/holdings", label: "Holdings", icon: PieChart },
-  { href: "/performance", label: "Performance", icon: Activity },
+  { href: "/portfolio", label: "Portfolio", icon: Wallet },
+  { href: "/decide", label: "Decision Lab", icon: Scale },
   { href: "/sip-lab", label: "SIP Lab", icon: FlaskConical },
+  { href: "/", label: "Theme demo", icon: LayoutDashboard },
+  { href: "/holdings", label: "Theme holdings", icon: PieChart },
+  { href: "/performance", label: "Theme perf", icon: Activity },
 ] as const;
 
 function navActive(pathname: string, href: string): boolean {
@@ -49,6 +53,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const asOf = activeSmallcase?.as_of;
   const isSipLab = pathname.startsWith("/sip-lab");
+  const isPortfolioDecision =
+    pathname.startsWith("/portfolio") ||
+    pathname.startsWith("/decide") ||
+    isSipLab;
+  const showThemeControls = !isPortfolioDecision;
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-app)] text-[var(--text-primary)]">
@@ -56,15 +65,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Top bar */}
       <header className="sticky top-0 z-40 flex h-topbar items-center gap-4 border-b border-[var(--border-default)] bg-[var(--bg-app)]/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-[var(--bg-app)]/80">
         <Link
-          href="/"
+          href="/portfolio"
           className="shrink-0 text-sm font-semibold tracking-tight text-[var(--text-primary)]"
         >
-          Smallcase Finance
+          Backtest Hero
         </Link>
 
         <div className="hidden flex-1 md:block" />
 
-        {!isSipLab ? (
+        {showThemeControls ? (
           <SmallcaseSelect
             items={toOptions(smallcases)}
             value={smallcaseId}
@@ -73,7 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         ) : null}
 
-        {asOf && !isSipLab ? (
+        {asOf && showThemeControls ? (
           <span className="hidden text-xs text-[var(--text-muted)] sm:inline">
             As-of {formatDate(asOf)}
           </span>
@@ -105,7 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             })}
           </nav>
 
-          {!isSipLab ? (
+          {showThemeControls ? (
             <div className="mt-auto space-y-3 border-t border-[var(--border-subtle)] pt-4">
               <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]">
                 Range
@@ -134,11 +143,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {activeSmallcase.theme ? ` · ${activeSmallcase.theme}` : ""}
                 </p>
               ) : null}
+              <p className="px-1 text-[11px] text-[var(--text-muted)]">
+                Theme demo only — not your Kite book.
+              </p>
             </div>
           ) : (
             <div className="mt-auto border-t border-[var(--border-subtle)] pt-4">
               <p className="px-1 text-[11px] text-[var(--text-muted)]">
-                SIP window is set in the form (start / end).
+                {pathname.startsWith("/portfolio")
+                  ? "Refresh holdings when your Kite token is valid."
+                  : "SIP / decision window is set in the form."}
               </p>
             </div>
           )}

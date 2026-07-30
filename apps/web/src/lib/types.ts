@@ -260,3 +260,126 @@ export interface SipBacktestResponse {
   metrics?: SipMetrics | null;
   notes?: string;
 }
+
+// ── Portfolio Decision v1 ────────────────────────────────────────────────────
+
+export interface PortfolioHoldingItem {
+  symbol: string;
+  exchange: string;
+  quantity: number;
+  average_price?: number | null;
+  last_price?: number | null;
+  value?: number | null;
+  weight?: number | null;
+  pnl?: number | null;
+  product?: string | null;
+  isin?: string | null;
+  sector?: string | null;
+}
+
+export interface PortfolioResponse {
+  snapshot_id: string;
+  synced_at: string;
+  source: string;
+  currency: string;
+  total_value?: number | null;
+  position_count: number;
+  holdings: PortfolioHoldingItem[];
+  warnings: string[];
+}
+
+export interface PortfolioStatusResponse {
+  kite_app_configured: boolean;
+  kite_session_configured: boolean;
+  login_url?: string | null;
+  has_snapshot: boolean;
+  latest_synced_at?: string | null;
+  position_count: number;
+  total_value?: number | null;
+  currency: string;
+  message: string;
+}
+
+export interface PortfolioSymbolsResponse {
+  symbols: string[];
+  synced_at?: string | null;
+}
+
+export interface DecisionConstituent {
+  symbol: string;
+  target_weight?: number | null;
+}
+
+export interface DecisionRunRequest {
+  basket: {
+    mode: "custom_weights" | "equal_weight";
+    constituents: DecisionConstituent[];
+  };
+  sip: {
+    amount: number;
+    day_of_month: number;
+    start_date: string;
+    end_date?: string | null;
+  };
+  benchmark_symbol?: string | null;
+  include_benchmark?: boolean;
+  include_weight_gap?: boolean;
+  strict_market_data?: boolean | null;
+}
+
+export interface SymbolCoverage {
+  symbol: string;
+  has_prices: boolean;
+  start?: string | null;
+  end?: string | null;
+}
+
+export interface PriceCoverageResponse {
+  data_source: string;
+  symbols: SymbolCoverage[];
+}
+
+export interface DecisionSeriesPoint {
+  date: string;
+  market_value: number;
+  invested_cum: number;
+}
+
+export interface DecisionLegResult {
+  symbol?: string | null;
+  xirr?: number | null;
+  total_invested: number;
+  final_value: number;
+  max_drawdown?: number | null;
+  series: DecisionSeriesPoint[];
+  cashflows_summary: Record<string, unknown>;
+  data_source: string;
+  warnings: string[];
+}
+
+export interface WeightGapRow {
+  symbol: string;
+  portfolio_weight: number;
+  target_weight: number;
+  delta_weight: number;
+  approx_value_delta?: number | null;
+}
+
+export interface DecisionRunResponse {
+  run_id: string;
+  data_source: string;
+  coverage: {
+    basket_symbols: number;
+    basket_with_prices: number;
+    benchmark_ok: boolean;
+    missing_symbols: string[];
+    price_start?: string | null;
+    price_end?: string | null;
+  };
+  warnings: string[];
+  candidate: DecisionLegResult;
+  benchmark?: DecisionLegResult | null;
+  delta_xirr?: number | null;
+  weight_gap: WeightGapRow[];
+  disclaimer: string;
+}

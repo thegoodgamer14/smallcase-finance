@@ -1,11 +1,12 @@
 # PRODUCT.md — SIP Lab / Basket Backtest Engine
 
-**Product name:** SIP Lab (Basket Backtest Engine)  
-**Repo / package history:** `smallcase-finance` v0 (local smallcase NAV demo) → SIP Lab  
-**Status:** v0 **shipped**; SIP Lab **Phases 1–2 shipped**; **live Upstox history path verified** (local `.env`); next = Phase 3 hardening  
-**Binding decisions:** [ADR 004](docs/decisions/004-sip-lab-prd-decisions.md) · [ADR 005](docs/decisions/005-upstox-sole-market-data.md)  
+**Product name:** Backtest Hero (SIP Lab + Portfolio Decision)  
+**Repo / package history:** `smallcase-finance` v0 → SIP Lab → Portfolio Decision v1  
+**Status:** v0 + SIP Lab P1–2 **shipped**; **Portfolio Decision v1 shipped** (Kite book + Decision Lab); Coin still deferred  
+**Binding decisions:** [ADR 004](docs/decisions/004-sip-lab-prd-decisions.md) · [ADR 005](docs/decisions/005-upstox-sole-market-data.md) · [ADR 007](docs/decisions/007-portfolio-decision-v1.md)  
 **Phased plan:** [docs/ROADMAP.md](docs/ROADMAP.md)  
-**SIP Lab ship writeup:** [docs/build-report-sip-lab-ui.md](docs/build-report-sip-lab-ui.md)  
+**PRD:** [docs/product/prd-portfolio-decision-v1.md](docs/product/prd-portfolio-decision-v1.md)  
+**Ship writeup:** [docs/build-report-portfolio-decision-v1.md](docs/build-report-portfolio-decision-v1.md)  
 **Upstox connect:** [docs/integrations/upstox.md](docs/integrations/upstox.md) §0 founder daily path
 
 ---
@@ -26,12 +27,13 @@ Personal, local-first tool to measure **monthly SIP performance** of custom **st
 
 ---
 
-## Current goal — after Phases 1–2
+## Current goal — Portfolio Decision v1 (shipped)
 
-**Shipped:** correct SIP engine (cash → units → XIRR), FastAPI `POST /backtests/sip` + `GET /strategies`, and Next.js **SIP Lab** at `/sip-lab` (XIRR-primary UI, demo labels, export). Full writeup: [docs/build-report-sip-lab-ui.md](docs/build-report-sip-lab-ui.md).
+**Shipped:** Kite equity **portfolio of record** (`/portfolio`, `/portfolio/*` APIs), **Decision Lab** (`/decide`, `POST /decisions/run`) = candidate SIP + benchmark SIP + DQ + weight gap; reuses SIP engine. Writeup: [build-report-portfolio-decision-v1.md](docs/build-report-portfolio-decision-v1.md).
 
-**Next (Phase 3):** benchmark SIP, multi-strategy compare, optional costs, richer DQ / strict Upstox mode.  
-**Later:** Phase 4 Kite equity import; Coin/MF last.
+**Also shipped earlier:** SIP engine + `/sip-lab`, theme demo dashboard, Upstox prices.
+
+**Next:** deeper Phase 3 polish (multi-strategy compare, costs), Coin/MF display later.
 
 Still true:
 
