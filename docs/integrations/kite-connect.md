@@ -41,6 +41,27 @@ Leave **postback URL** blank (orders/GTT — we do not place orders).
 
 ---
 
+## Consent screen: “Place, modify, and cancel orders”
+
+**You cannot turn that line off for a standard Kite Connect app.**  
+Zerodha shows a **fixed permission list** for every Connect `api_key` login. There is **no** OAuth scope parameter on  
+`https://kite.zerodha.com/connect/login?v=3&api_key=...` to request “holdings only.”
+
+| What you see on Authorize | What Backtest Hero does |
+|---------------------------|-------------------------|
+| Place / modify / cancel orders | **Never** — no order APIs in this repo |
+| Access holdings and positions | **Yes** — `GET /portfolio/holdings` via Kite client |
+| Account balance and margins | Not used (token may allow; we do not call margins) |
+| Profile details | Optional smoke (`profile` CLI only) |
+
+**Product policy:** Kite is **read-only equity book**. Orders, GTT, funds, and trading are permanent non-goals.
+
+If the consent copy worries you: that is Zerodha’s Connect product UX, not an extra permission we opted into. After authorize, this app only calls **holdings** (and optionally **profile** for debug). Tokens still technically belong to a full Connect session on Zerodha’s side; we simply never exercise order endpoints.
+
+**Postback URL** on the developer app should stay **empty** (used for order updates we do not need).
+
+---
+
 ## Local setup
 
 ```bash

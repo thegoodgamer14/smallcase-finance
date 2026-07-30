@@ -40,7 +40,13 @@ class KiteSession:
 
 
 def kite_login_url(*, api_key: str | None = None) -> str:
-    """Public browser login URL for the registered Kite Connect app."""
+    """Public browser login URL for the registered Kite Connect app.
+
+    Official params are only ``v`` and ``api_key``. There is no scope/query
+    flag to hide "place orders" on Zerodha's consent page — Connect apps
+    always show the full fixed permission list. Our product still only
+    uses holdings (read-only) after the token is issued.
+    """
     key = (api_key if api_key is not None else KITE_API_KEY).strip()
     if not key:
         raise KiteAuthError("KITE_API_KEY is not set")

@@ -98,8 +98,9 @@ export default function PortfolioPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Portfolio</h1>
           <p className="mt-1 max-w-xl text-sm text-[var(--text-secondary)]">
-            Your live equity book from Kite (read-only). Prices for backtests still
-            come from Upstox. This is not theme demo holdings.
+            Your live equity book from Kite (read-only — we never place orders).
+            Prices for backtests still come from Upstox. This is not theme demo
+            holdings.
           </p>
         </div>
         <button
@@ -156,6 +157,15 @@ export default function PortfolioPage() {
         ) : loading ? (
           <p className="mt-2 text-[var(--text-muted)]">Loading status…</p>
         ) : null}
+        <p className="mt-3 text-xs leading-relaxed text-[var(--text-muted)]">
+          Zerodha’s authorize screen may list “Place, modify, and cancel orders”
+          for every Kite Connect app. That list is fixed by Zerodha — we cannot
+          request holdings-only scopes. Backtest Hero only pulls{" "}
+          <strong className="font-medium text-[var(--text-secondary)]">
+            holdings
+          </strong>{" "}
+          (read-only) and never places, modifies, or cancels orders.
+        </p>
       </div>
 
       {book ? (

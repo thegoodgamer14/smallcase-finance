@@ -47,9 +47,14 @@ class KiteHolding:
 
 
 class KiteClient:
-    """Read-only Kite Connect client.
+    """Read-only Kite Connect client (holdings + profile only).
 
     Auth header: ``Authorization: token api_key:access_token``
+
+    **No order placement.** This client only uses HTTP GET for
+    ``/user/profile`` and ``/portfolio/holdings``. Zerodha's authorize
+    screen may still list order permissions for all Connect apps; that is
+    not configurable via login URL scopes (see docs/integrations/kite-connect.md).
     """
 
     def __init__(
